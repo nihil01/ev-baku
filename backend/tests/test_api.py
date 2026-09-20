@@ -74,14 +74,49 @@ def test_user_listing_media_publish_flow():
             files={"file": ("home.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
         )
         assert uploaded.status_code == 201, uploaded.text
+        first_media_id = uploaded.json()["id"]
 
         published = client.post(f"/api/v1/listings/{listing_id}/publish", headers=headers)
         assert published.status_code == 200, published.text
         assert published.json()["status"] == "published"
 
+        # Published listings stay published and remain fully editable by their author.
+        published_update = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={
+                "title": "Updated published apartment in Baku",
+                "monthly_rent": 1550,
+                "pets_allowed": True,
+                "utilities_included": True,
+                "minimum_lease_months": 3,
+            },
+            headers=headers,
+        )
+        assert published_update.status_code == 200, published_update.text
+        assert published_update.json()["status"] == "published"
+        assert published_update.json()["monthly_rent"] == 1550
+        assert published_update.json()["pets_allowed"] is True
+
+        second_upload = client.post(
+            f"/api/v1/listings/{listing_id}/media",
+            headers=headers,
+            data={"media_type": "image", "is_cover": "false"},
+            files={"file": ("second.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+        )
+        assert second_upload.status_code == 201, second_upload.text
+        second_media_id = second_upload.json()["id"]
+        cover = client.post(f"/api/v1/media/{second_media_id}/cover", headers=headers)
+        assert cover.status_code == 200, cover.text
+        assert cover.json()["is_cover"] is True
+        assert client.delete(f"/api/v1/media/{first_media_id}", headers=headers).status_code == 200
+        last_photo_delete = client.delete(f"/api/v1/media/{second_media_id}", headers=headers)
+        assert last_photo_delete.status_code == 422
+
         public = client.get("/api/v1/listings?district=yasamal")
         assert public.status_code == 200
         assert public.json()["total"] == 1
+        assert public.json()["items"][0]["title"] == "Updated published apartment in Baku"
+        assert public.json()["items"][0]["utilities_included"] is True
         assert public.json()["items"][0]["media"][0]["url"].startswith("/api/v1/media/")
 
         archived = client.post(f"/api/v1/listings/{listing_id}/archive", headers=headers)

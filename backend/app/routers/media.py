@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -92,7 +92,60 @@ async def delete_media(
     )).scalar_one_or_none()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
+    if media.media_type == MediaType.image:
+        image_count = (await db.execute(
+            select(func.count(ListingMedia.id)).where(
+                ListingMedia.listing_id == media.listing_id,
+                ListingMedia.media_type == MediaType.image,
+            )
+        )).scalar_one()
+        listing_status = (await db.execute(
+            select(Listing.status).where(Listing.id == media.listing_id)
+        )).scalar_one()
+        if listing_status.value == "published" and image_count <= 1:
+            raise HTTPException(
+                status_code=422,
+                detail="A published listing must keep at least one property photo",
+            )
     await storage.delete(media.object_key)
     await db.delete(media)
     await db.commit()
     return Message(message="Media deleted")
+
+
+@router.post("/media/{media_id}/cover", response_model=MediaRead)
+async def set_media_cover(
+    media_id: str,
+    auth: AuthContext = Depends(csrf_protected),
+    db: AsyncSession = Depends(get_db),
+):
+    media = (await db.execute(
+        select(ListingMedia).join(Listing).where(
+            ListingMedia.id == media_id,
+            Listing.owner_id == auth.user.id,
+        )
+    )).scalar_one_or_none()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    if media.media_type != MediaType.image:
+        raise HTTPException(status_code=422, detail="Only a property photo can be used as the cover")
+
+    await db.execute(
+        update(ListingMedia)
+        .where(ListingMedia.listing_id == media.listing_id)
+        .values(is_cover=False)
+    )
+    media.is_cover = True
+    await db.commit()
+    await db.refresh(media)
+    return MediaRead(
+        id=media.id,
+        media_type=media.media_type,
+        url=f"/api/v1/media/{media.id}",
+        content_type=media.content_type,
+        size_bytes=media.size_bytes,
+        original_name=media.original_name,
+        caption=media.caption,
+        sort_order=media.sort_order,
+        is_cover=media.is_cover,
+    )

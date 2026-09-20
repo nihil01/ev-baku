@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import get_settings
 from .database import create_schema
@@ -55,10 +54,9 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_guards(request: Request, call_next):
-
     if (
-            not settings.cors_allow_all
-            and request.method in {"POST", "PATCH", "PUT", "DELETE"}
+        not settings.cors_allow_all
+        and request.method in {"POST", "PATCH", "PUT", "DELETE"}
     ):
         origin = request.headers.get("origin")
 

@@ -48,6 +48,13 @@ const copy = {
     available: 'Uzunmüddətli kirayə', details: 'Elan haqqında', photos: 'Foto', source: 'Elan sahibi ilə əlaqə',
     sourceNote: 'Qiymət və mövcudluğu birbaşa elan sahibi ilə dəqiqləşdirin.', close: 'Bağla', prev: 'Əvvəlki foto', next: 'Növbəti foto', studio: 'Studiya', villa: 'Villa',
     resultMap: 'xəritədə', selectedHome: 'Seçilmiş elan', filters: 'Filtrlər', results: 'Nəticələr',
+    features: 'İmkanlar', rules: 'Yaşayış qaydaları', propertyFacts: 'Əmlak haqqında', bedrooms: 'Yataq otağı',
+    bathrooms: 'Hamam', guests: 'Maks. qonaq', floor: 'Mərtəbə', lease: 'Minimum kirayə', months: 'ay',
+    deposit: 'Depozit', noDeposit: 'Depozitsiz', availableFrom: 'Mövcud tarix', notSpecified: 'Göstərilməyib',
+    elevator: 'Lift', balcony: 'Balkon', parking: 'Parkinq', ac: 'Kondisioner', heating: 'İstilik',
+    utilities: 'Kommunal daxildir', petsAllowed: 'Ev heyvanı olar', petsNotAllowed: 'Ev heyvanı olmaz',
+    smokingAllowed: 'Siqaret çəkmək olar', smokingNotAllowed: 'Siqaret çəkmək olmaz', included: 'Var', notIncluded: 'Yoxdur',
+    floorPlans: 'Planlaşdırma', videos: 'Video baxış', noPhotos: 'Foto əlavə edilməyib',
   },
   en: {
     search: 'District, residence, or address', back: 'Back', rent: 'Baku homes for rent',
@@ -63,6 +70,13 @@ const copy = {
     available: 'Long-term rental', details: 'Listing details', photos: 'Photo', source: 'Contact the owner',
     sourceNote: 'Confirm the current price and availability directly with the owner.', close: 'Close', prev: 'Previous photo', next: 'Next photo', studio: 'Studio', villa: 'Villa',
     resultMap: 'on map', selectedHome: 'Selected rental', filters: 'Filters', results: 'Results',
+    features: 'Amenities', rules: 'House rules', propertyFacts: 'Property details', bedrooms: 'Bedrooms',
+    bathrooms: 'Bathrooms', guests: 'Max guests', floor: 'Floor', lease: 'Minimum lease', months: 'months',
+    deposit: 'Deposit', noDeposit: 'No deposit', availableFrom: 'Available from', notSpecified: 'Not specified',
+    elevator: 'Elevator', balcony: 'Balcony', parking: 'Parking', ac: 'Air conditioning', heating: 'Heating',
+    utilities: 'Utilities included', petsAllowed: 'Pets allowed', petsNotAllowed: 'No pets',
+    smokingAllowed: 'Smoking allowed', smokingNotAllowed: 'No smoking', included: 'Included', notIncluded: 'Not included',
+    floorPlans: 'Floor plans', videos: 'Video tours', noPhotos: 'No property photos',
   },
   ru: {
     search: 'Район, жилой комплекс или адрес', back: 'Назад', rent: 'Аренда жилья в Баку',
@@ -78,6 +92,13 @@ const copy = {
     available: 'Долгосрочная аренда', details: 'Об объявлении', photos: 'Фото', source: 'Связаться с владельцем',
     sourceNote: 'Уточните актуальную цену и доступность напрямую у владельца.', close: 'Закрыть', prev: 'Предыдущее фото', next: 'Следующее фото', studio: 'Студия', villa: 'Вилла',
     resultMap: 'на карте', selectedHome: 'Выбранное жильё', filters: 'Фильтры', results: 'Результаты',
+    features: 'Удобства', rules: 'Правила проживания', propertyFacts: 'О квартире', bedrooms: 'Спальни',
+    bathrooms: 'Санузлы', guests: 'Макс. гостей', floor: 'Этаж', lease: 'Минимальный срок', months: 'месяцев',
+    deposit: 'Депозит', noDeposit: 'Без депозита', availableFrom: 'Доступно с', notSpecified: 'Не указано',
+    elevator: 'Лифт', balcony: 'Балкон', parking: 'Парковка', ac: 'Кондиционер', heating: 'Отопление',
+    utilities: 'Коммунальные включены', petsAllowed: 'Можно с животными', petsNotAllowed: 'Без животных',
+    smokingAllowed: 'Можно курить', smokingNotAllowed: 'Курить нельзя', included: 'Есть', notIncluded: 'Нет',
+    floorPlans: 'Планировки', videos: 'Видеообзор', noPhotos: 'Фотографии не добавлены',
   },
 } as const
 
@@ -124,6 +145,14 @@ function Icon({ name }: { name: 'search' | 'heart' | 'map' | 'list' | 'split' | 
 
 function money(value: number) {
   return new Intl.NumberFormat('az-AZ', { maximumFractionDigits: 0 }).format(value)
+}
+
+function localizedDate(value: string | null, lang: Lang, fallback: string) {
+  if (!value) return fallback
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return value
+  const locale = lang === 'az' ? 'az-AZ' : lang === 'ru' ? 'ru-RU' : 'en-GB'
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day))
 }
 
 function safeSaved(): string[] {
@@ -317,10 +346,25 @@ export default function MapExperience({ lang, onClose }: Props) {
     return () => window.removeEventListener('keydown', handleKey)
   }, [detailListing, onClose])
 
-  const detailMedia = detailListing
-    ? [...detailListing.media].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || a.sort_order - b.sort_order)
+  const detailPhotos = detailListing
+    ? detailListing.media.filter((item) => item.media_type === 'image').sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || a.sort_order - b.sort_order)
     : []
-  const activeMedia = detailMedia[galleryIndex] || detailMedia[0]
+  const detailPlans = detailListing
+    ? detailListing.media.filter((item) => item.media_type === 'floor_plan').sort((a, b) => a.sort_order - b.sort_order)
+    : []
+  const detailVideos = detailListing
+    ? detailListing.media.filter((item) => item.media_type === 'video').sort((a, b) => a.sort_order - b.sort_order)
+    : []
+  const activePhoto = detailPhotos[galleryIndex] || detailPhotos[0]
+  const featureItems = detailListing ? [
+    [t.furnished, detailListing.furnished],
+    [t.elevator, detailListing.has_elevator],
+    [t.balcony, detailListing.has_balcony],
+    [t.parking, detailListing.has_parking],
+    [t.ac, detailListing.has_air_conditioning],
+    [t.heating, detailListing.has_heating],
+    [t.utilities, detailListing.utilities_included],
+  ] as const : []
 
   return <motion.section
     className={`search-experience view-${layout}`}
@@ -483,22 +527,43 @@ export default function MapExperience({ lang, onClose }: Props) {
         <motion.article className="listing-modal" role="dialog" aria-modal="true" aria-labelledby="listing-modal-title" initial={{ opacity: 0, y: 28, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: .99 }}>
           <header><div><span>{t.available}</span><b>{localizedDistrict(detailListing.district)} · Bakı</b></div><button type="button" onClick={() => setDetailListing(null)} aria-label={t.close}><Icon name="close" /></button></header>
           <div className="listing-modal__content">
-            <div className="listing-modal__gallery">
-              {activeMedia ? activeMedia.media_type === 'video'
-                ? <video src={mediaUrl(activeMedia.url)} controls playsInline />
-                : <img src={mediaUrl(activeMedia.url)} alt={activeMedia.caption || detailListing.title} />
-                : <div className="listing-image-placeholder"><Icon name="home" /></div>}
-              {detailMedia.length > 1 && <>
-                <button type="button" className="previous" aria-label={t.prev} onClick={() => setGalleryIndex((galleryIndex - 1 + detailMedia.length) % detailMedia.length)}>‹</button>
-                <button type="button" className="next" aria-label={t.next} onClick={() => setGalleryIndex((galleryIndex + 1) % detailMedia.length)}>›</button>
-                <span>{galleryIndex + 1} / {detailMedia.length}</span>
-              </>}
+            <div className="listing-modal__visuals">
+              <div className="listing-modal__gallery">
+                {activePhoto
+                  ? <img src={mediaUrl(activePhoto.url)} alt={activePhoto.caption || detailListing.title} />
+                  : <div className="listing-image-placeholder"><Icon name="home" /><span>{t.noPhotos}</span></div>}
+                {detailPhotos.length > 1 && <>
+                  <button type="button" className="previous" aria-label={t.prev} onClick={() => setGalleryIndex((galleryIndex - 1 + detailPhotos.length) % detailPhotos.length)}>‹</button>
+                  <button type="button" className="next" aria-label={t.next} onClick={() => setGalleryIndex((galleryIndex + 1) % detailPhotos.length)}>›</button>
+                  <span>{galleryIndex + 1} / {detailPhotos.length}</span>
+                </>}
+              </div>
+              {detailPhotos.length > 1 && <div className="modal-photo-strip">{detailPhotos.map((photo, index) => <button type="button" key={photo.id} className={index === galleryIndex ? 'active' : ''} onClick={() => setGalleryIndex(index)}><img src={mediaUrl(photo.url)} alt={photo.caption || `${detailListing.title} ${index + 1}`} /></button>)}</div>}
+              {detailPlans.length > 0 && <section className="modal-media-section"><h3>{t.floorPlans}<span>{detailPlans.length}</span></h3><div className="modal-plan-grid">{detailPlans.map((plan) => <a key={plan.id} href={mediaUrl(plan.url)} target="_blank" rel="noreferrer"><img src={mediaUrl(plan.url)} alt={plan.caption || t.floorPlans} /></a>)}</div></section>}
+              {detailVideos.length > 0 && <section className="modal-media-section"><h3>{t.videos}<span>{detailVideos.length}</span></h3><div className="modal-video-list">{detailVideos.map((video) => <video key={video.id} src={mediaUrl(video.url)} controls playsInline preload="metadata" />)}</div></section>}
             </div>
             <div className="listing-modal__info">
               <div className="listing-modal__title"><div><span>{t.details}</span><h2 id="listing-modal-title">{detailListing.title}</h2><p>{detailListing.address}</p></div><button type="button" className={saved.includes(detailListing.id) ? 'active' : ''} onClick={() => toggleSaved(detailListing.id)} aria-label={saved.includes(detailListing.id) ? t.unsave : t.save}><Icon name="heart" /></button></div>
               <div className="modal-price"><b>{money(Number(detailListing.monthly_rent))} ₼</b><span>{t.month}</span></div>
               <div className="modal-facts"><div><b>{detailListing.rooms}</b><span>{t.rooms}</span></div><div><b>{detailListing.area_sqm} {t.area}</b><span>{['house', 'villa'].includes(detailListing.property_type) ? t.house : t.apartment}</span></div><div><b>{detailListing.furnished ? t.yes : t.no}</b><span>{t.furnished}</span></div></div>
               <p className="modal-description">{detailListing.description}</p>
+
+              <section className="modal-detail-section"><h3>{t.propertyFacts}</h3><div className="modal-property-grid">
+                <div><span>{t.bedrooms}</span><b>{detailListing.bedrooms}</b></div>
+                <div><span>{t.bathrooms}</span><b>{detailListing.bathrooms}</b></div>
+                <div><span>{t.guests}</span><b>{detailListing.max_guests}</b></div>
+                <div><span>{t.floor}</span><b>{detailListing.floor ?? '—'}{detailListing.total_floors ? ` / ${detailListing.total_floors}` : ''}</b></div>
+                <div><span>{t.lease}</span><b>{detailListing.minimum_lease_months} {t.months}</b></div>
+                <div><span>{t.deposit}</span><b>{detailListing.deposit ? `${money(Number(detailListing.deposit))} ₼` : t.noDeposit}</b></div>
+                <div className="wide"><span>{t.availableFrom}</span><b>{localizedDate(detailListing.available_from, lang, t.notSpecified)}</b></div>
+              </div></section>
+
+              <section className="modal-detail-section"><h3>{t.features}</h3><div className="modal-feature-grid">{featureItems.map(([label, enabled]) => <div key={label} className={enabled ? 'enabled' : 'disabled'}><i>{enabled ? '✓' : '—'}</i><span>{label}</span><b>{enabled ? t.included : t.notIncluded}</b></div>)}</div></section>
+              <section className="modal-detail-section"><h3>{t.rules}</h3><div className="modal-rules">
+                <div className={detailListing.pets_allowed ? 'allowed' : 'denied'}><i>{detailListing.pets_allowed ? '✓' : '×'}</i><span>{detailListing.pets_allowed ? t.petsAllowed : t.petsNotAllowed}</span></div>
+                <div className={detailListing.smoking_allowed ? 'allowed' : 'denied'}><i>{detailListing.smoking_allowed ? '✓' : '×'}</i><span>{detailListing.smoking_allowed ? t.smokingAllowed : t.smokingNotAllowed}</span></div>
+              </div></section>
+
               <div className="modal-source"><p>{t.sourceNote}<br /><b>{detailListing.contact_name}</b></p><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a></div>
             </div>
           </div>

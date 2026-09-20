@@ -57,6 +57,8 @@ export const api = {
     body.append('sort_order', String(order))
     return request<ListingMedia>(`/listings/${listingId}/media`, { method: 'POST', body })
   },
+  setMediaCover: (mediaId: string) => request<ListingMedia>(`/media/${mediaId}/cover`, { method: 'POST' }),
+  deleteMedia: (mediaId: string) => request<{ message: string }>(`/media/${mediaId}`, { method: 'DELETE' }),
 }
 
 export function mediaUrl(url: string) {

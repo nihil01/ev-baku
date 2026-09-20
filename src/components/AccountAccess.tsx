@@ -2,15 +2,30 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api, mediaUrl } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
-import type { DistrictId, Lang, Listing, ListingPayload, PropertyType } from '../types/api'
+import type {
+  DistrictId,
+  Lang,
+  Listing,
+  ListingMedia,
+  ListingPayload,
+  MediaType,
+  PropertyType,
+} from '../types/api'
 import './AccountAccess.css'
 
 type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void }
+type DashboardTab = 'list' | 'new' | 'edit'
 
 const text = {
-  az: { login: 'Daxil ol', account: 'Kabinet', signin: 'Hesaba daxil ol', signup: 'Qeydiyyat', email: 'E-poçt', password: 'Şifrə', name: 'Ad və soyad', phone: 'Telefon', noAccount: 'Hesabınız yoxdur?', hasAccount: 'Artıq hesabınız var?', close: 'Bağla', my: 'Elanlarım', add: 'Yeni elan', details: 'Əsas məlumatlar', logout: 'Çıxış', draft: 'Qaralama', published: 'Aktiv', archived: 'Arxiv', publish: 'Dərc et', archive: 'Arxivlə', remove: 'Sil', empty: 'Hələ elan yaratmamısınız.', title: 'Başlıq', description: 'Təsvir', type: 'Əmlak tipi', district: 'Rayon', address: 'Ünvan', rent: 'Aylıq kirayə', deposit: 'Depozit', area: 'Sahə, m²', rooms: 'Otaq', bedrooms: 'Yataq otağı', bathrooms: 'Hamam', guests: 'Nəfər sayı', floor: 'Mərtəbə', floors: 'Mərtəbə sayı', furnished: 'Əşyalı', lease: 'Minimum kirayə, ay', available: 'Mövcud tarix', coordinates: 'Xəritə koordinatları', amenities: 'İmkanlar', elevator: 'Lift', balcony: 'Balkon', parking: 'Parkinq', ac: 'Kondisioner', heating: 'İstilik', pets: 'Ev heyvanı', smoking: 'Siqaret', utilities: 'Kommunal daxildir', photos: 'Mənzil fotoları', plan: 'Mənzilin planı', video: 'Video', saveDraft: 'Qaralama yarat', createPublish: 'Yarat və dərc et', saving: 'Yüklənir…', created: 'Elan yaradıldı', error: 'Xəta baş verdi' },
-  en: { login: 'Sign in', account: 'Dashboard', signin: 'Sign in to your account', signup: 'Create account', email: 'Email', password: 'Password', name: 'Full name', phone: 'Phone', noAccount: 'No account yet?', hasAccount: 'Already registered?', close: 'Close', my: 'My listings', add: 'New listing', details: 'Property details', logout: 'Sign out', draft: 'Draft', published: 'Published', archived: 'Archived', publish: 'Publish', archive: 'Archive', remove: 'Delete', empty: 'You have not created any listings yet.', title: 'Title', description: 'Description', type: 'Property type', district: 'District', address: 'Address', rent: 'Monthly rent', deposit: 'Deposit', area: 'Area, m²', rooms: 'Rooms', bedrooms: 'Bedrooms', bathrooms: 'Bathrooms', guests: 'Maximum guests', floor: 'Floor', floors: 'Total floors', furnished: 'Furnished', lease: 'Minimum lease, months', available: 'Available from', coordinates: 'Map coordinates', amenities: 'Amenities', elevator: 'Elevator', balcony: 'Balcony', parking: 'Parking', ac: 'Air conditioning', heating: 'Heating', pets: 'Pets allowed', smoking: 'Smoking allowed', utilities: 'Utilities included', photos: 'Property photos', plan: 'Floor plan', video: 'Video', saveDraft: 'Create draft', createPublish: 'Create and publish', saving: 'Uploading…', created: 'Listing created', error: 'Something went wrong' },
-  ru: { login: 'Войти', account: 'Кабинет', signin: 'Вход в аккаунт', signup: 'Регистрация', email: 'Электронная почта', password: 'Пароль', name: 'Имя и фамилия', phone: 'Телефон', noAccount: 'Ещё нет аккаунта?', hasAccount: 'Уже зарегистрированы?', close: 'Закрыть', my: 'Мои объявления', add: 'Новое объявление', details: 'Основные данные', logout: 'Выйти', draft: 'Черновик', published: 'Опубликовано', archived: 'В архиве', publish: 'Опубликовать', archive: 'В архив', remove: 'Удалить', empty: 'Вы пока не создали ни одного объявления.', title: 'Название', description: 'Описание', type: 'Тип жилья', district: 'Район', address: 'Адрес', rent: 'Аренда в месяц', deposit: 'Депозит', area: 'Площадь, м²', rooms: 'Комнаты', bedrooms: 'Спальни', bathrooms: 'Санузлы', guests: 'Вместимость, человек', floor: 'Этаж', floors: 'Этажей в доме', furnished: 'С мебелью', lease: 'Минимальный срок, месяцев', available: 'Доступно с', coordinates: 'Координаты на карте', amenities: 'Удобства', elevator: 'Лифт', balcony: 'Балкон', parking: 'Парковка', ac: 'Кондиционер', heating: 'Отопление', pets: 'Можно с животными', smoking: 'Можно курить', utilities: 'Коммунальные включены', photos: 'Фотографии квартиры', plan: 'План квартиры', video: 'Видео', saveDraft: 'Создать черновик', createPublish: 'Создать и опубликовать', saving: 'Загрузка…', created: 'Объявление создано', error: 'Произошла ошибка' },
+  az: {
+    login: 'Daxil ol', account: 'Kabinet', signin: 'Hesaba daxil ol', signup: 'Qeydiyyat', email: 'E-poçt', password: 'Şifrə', name: 'Ad və soyad', phone: 'Telefon', noAccount: 'Hesabınız yoxdur?', hasAccount: 'Artıq hesabınız var?', close: 'Bağla', my: 'Elanlarım', add: 'Yeni elan', edit: 'Redaktə et', editing: 'Elanı redaktə et', details: 'Əsas məlumatlar', logout: 'Çıxış', draft: 'Qaralama', published: 'Aktiv', archived: 'Arxiv', publish: 'Dərc et', archive: 'Arxivlə', remove: 'Sil', cancel: 'Ləğv et', empty: 'Hələ elan yaratmamısınız.', title: 'Başlıq', description: 'Təsvir', type: 'Əmlak tipi', district: 'Rayon', address: 'Ünvan', rent: 'Aylıq kirayə', deposit: 'Depozit', area: 'Sahə, m²', rooms: 'Otaq', bedrooms: 'Yataq otağı', bathrooms: 'Hamam', guests: 'Nəfər sayı', floor: 'Mərtəbə', floors: 'Mərtəbə sayı', furnished: 'Əşyalı', lease: 'Minimum kirayə, ay', available: 'Mövcud tarix', coordinates: 'Xəritə koordinatları', amenities: 'İmkanlar və qaydalar', elevator: 'Lift', balcony: 'Balkon', parking: 'Parkinq', ac: 'Kondisioner', heating: 'İstilik', pets: 'Ev heyvanı', smoking: 'Siqaret', utilities: 'Kommunal daxildir', photos: 'Mənzil fotoları', plan: 'Mənzilin planı', video: 'Video', saveDraft: 'Qaralama yarat', createPublish: 'Yarat və dərc et', saveChanges: 'Dəyişiklikləri saxla', saving: 'Yüklənir…', created: 'Elan yaradıldı', updated: 'Elan yeniləndi', error: 'Xəta baş verdi', currentMedia: 'Yüklənmiş media', addMedia: 'Yeni media əlavə et', makeCover: 'Üz qabığı et', cover: 'Üz qabığı', deleteMedia: 'Medianı sil', noMedia: 'Bu bölmədə media yoxdur', publishedHint: 'Dəyişikliklər aktiv elanda dərhal görünəcək.', contact: 'Əlaqə', files: 'fayl', confirmMedia: 'Bu media faylı silinsin?', atLeastPhoto: 'Dərc edilmiş elanda ən azı bir foto qalmalıdır.',
+  },
+  en: {
+    login: 'Sign in', account: 'Dashboard', signin: 'Sign in to your account', signup: 'Create account', email: 'Email', password: 'Password', name: 'Full name', phone: 'Phone', noAccount: 'No account yet?', hasAccount: 'Already registered?', close: 'Close', my: 'My listings', add: 'New listing', edit: 'Edit', editing: 'Edit listing', details: 'Property details', logout: 'Sign out', draft: 'Draft', published: 'Published', archived: 'Archived', publish: 'Publish', archive: 'Archive', remove: 'Delete', cancel: 'Cancel', empty: 'You have not created any listings yet.', title: 'Title', description: 'Description', type: 'Property type', district: 'District', address: 'Address', rent: 'Monthly rent', deposit: 'Deposit', area: 'Area, m²', rooms: 'Rooms', bedrooms: 'Bedrooms', bathrooms: 'Bathrooms', guests: 'Maximum guests', floor: 'Floor', floors: 'Total floors', furnished: 'Furnished', lease: 'Minimum lease, months', available: 'Available from', coordinates: 'Map coordinates', amenities: 'Amenities and rules', elevator: 'Elevator', balcony: 'Balcony', parking: 'Parking', ac: 'Air conditioning', heating: 'Heating', pets: 'Pets allowed', smoking: 'Smoking allowed', utilities: 'Utilities included', photos: 'Property photos', plan: 'Floor plans', video: 'Videos', saveDraft: 'Create draft', createPublish: 'Create and publish', saveChanges: 'Save changes', saving: 'Uploading…', created: 'Listing created', updated: 'Listing updated', error: 'Something went wrong', currentMedia: 'Uploaded media', addMedia: 'Add new media', makeCover: 'Set as cover', cover: 'Cover', deleteMedia: 'Delete media', noMedia: 'No media in this section', publishedHint: 'Changes will appear immediately in the published listing.', contact: 'Contact', files: 'files', confirmMedia: 'Delete this media file?', atLeastPhoto: 'A published listing must keep at least one photo.',
+  },
+  ru: {
+    login: 'Войти', account: 'Кабинет', signin: 'Вход в аккаунт', signup: 'Регистрация', email: 'Электронная почта', password: 'Пароль', name: 'Имя и фамилия', phone: 'Телефон', noAccount: 'Ещё нет аккаунта?', hasAccount: 'Уже зарегистрированы?', close: 'Закрыть', my: 'Мои объявления', add: 'Новое объявление', edit: 'Редактировать', editing: 'Редактирование объявления', details: 'Основные данные', logout: 'Выйти', draft: 'Черновик', published: 'Опубликовано', archived: 'В архиве', publish: 'Опубликовать', archive: 'В архив', remove: 'Удалить', cancel: 'Отменить', empty: 'Вы пока не создали ни одного объявления.', title: 'Название', description: 'Описание', type: 'Тип жилья', district: 'Район', address: 'Адрес', rent: 'Аренда в месяц', deposit: 'Депозит', area: 'Площадь, м²', rooms: 'Комнаты', bedrooms: 'Спальни', bathrooms: 'Санузлы', guests: 'Вместимость, человек', floor: 'Этаж', floors: 'Этажей в доме', furnished: 'С мебелью', lease: 'Минимальный срок, месяцев', available: 'Доступно с', coordinates: 'Координаты на карте', amenities: 'Удобства и правила', elevator: 'Лифт', balcony: 'Балкон', parking: 'Парковка', ac: 'Кондиционер', heating: 'Отопление', pets: 'Можно с животными', smoking: 'Можно курить', utilities: 'Коммунальные включены', photos: 'Фотографии квартиры', plan: 'Планировки', video: 'Видео', saveDraft: 'Создать черновик', createPublish: 'Создать и опубликовать', saveChanges: 'Сохранить изменения', saving: 'Загрузка…', created: 'Объявление создано', updated: 'Объявление обновлено', error: 'Произошла ошибка', currentMedia: 'Загруженные материалы', addMedia: 'Добавить новые материалы', makeCover: 'Сделать обложкой', cover: 'Обложка', deleteMedia: 'Удалить файл', noMedia: 'В этом разделе пока ничего нет', publishedHint: 'Изменения сразу появятся в опубликованном объявлении.', contact: 'Контакты', files: 'файлов', confirmMedia: 'Удалить этот медиафайл?', atLeastPhoto: 'В опубликованном объявлении должна остаться хотя бы одна фотография.',
+  },
 } as const
 
 const districtCenters: Record<DistrictId, [number, number]> = {
@@ -40,6 +55,11 @@ function emptyListing(userName = '', phone = ''): ListingPayload {
     smoking_allowed: false, utilities_included: false, minimum_lease_months: 1,
     available_from: null, contact_name: userName, contact_phone: phone,
   }
+}
+
+function listingPayload(listing: Listing): ListingPayload {
+  const { id: _id, owner_id: _owner, status: _status, media: _media, created_at: _created, updated_at: _updated, published_at: _published, ...payload } = listing
+  return payload
 }
 
 export default function AccountAccess({ lang, compact = false, onListingsChanged }: Props) {
@@ -96,13 +116,15 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
 function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang; onClose: () => void; onLogout: () => Promise<void>; onListingsChanged?: () => void }) {
   const { user } = useAuth()
   const t = text[lang]
-  const [tab, setTab] = useState<'list' | 'new'>('list')
+  const [tab, setTab] = useState<DashboardTab>('list')
   const [listings, setListings] = useState<Listing[]>([])
   const [refresh, setRefresh] = useState(0)
+  const [editing, setEditing] = useState<Listing | null>(null)
   const [form, setForm] = useState<ListingPayload>(() => emptyListing(user?.full_name, user?.phone || ''))
+  const [existingMedia, setExistingMedia] = useState<ListingMedia[]>([])
   const [photos, setPhotos] = useState<File[]>([])
-  const [plan, setPlan] = useState<File | null>(null)
-  const [video, setVideo] = useState<File | null>(null)
+  const [plans, setPlans] = useState<File[]>([])
+  const [videos, setVideos] = useState<File[]>([])
   const [publishNow, setPublishNow] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -117,19 +139,38 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
     const [longitude, latitude] = districtCenters[value]
     setForm((current) => ({ ...current, district: value, longitude, latitude }))
   }
+  const clearUploads = () => { setPhotos([]); setPlans([]); setVideos([]) }
+  const startCreate = () => {
+    setEditing(null); setExistingMedia([]); clearUploads(); setPublishNow(true)
+    setForm(emptyListing(user?.full_name, user?.phone || '')); setMessage(''); setError(''); setTab('new')
+  }
+  const startEdit = (listing: Listing) => {
+    setEditing(listing); setExistingMedia(listing.media); clearUploads(); setPublishNow(false)
+    setForm(listingPayload(listing)); setMessage(''); setError(''); setTab('edit')
+  }
+  const finishForm = () => {
+    setEditing(null); setExistingMedia([]); clearUploads(); setForm(emptyListing(user?.full_name, user?.phone || '')); setTab('list')
+  }
+  const uploadNewMedia = async (listingId: string) => {
+    const existingPhotos = existingMedia.filter((item) => item.media_type === 'image')
+    const nextOrder = (type: MediaType) => Math.max(-1, ...existingMedia.filter((item) => item.media_type === type).map((item) => item.sort_order)) + 1
+    for (const [index, photo] of photos.entries()) await api.uploadMedia(listingId, photo, 'image', !existingPhotos.length && index === 0, nextOrder('image') + index)
+    for (const [index, plan] of plans.entries()) await api.uploadMedia(listingId, plan, 'floor_plan', false, nextOrder('floor_plan') + index)
+    for (const [index, video] of videos.entries()) await api.uploadMedia(listingId, video, 'video', false, nextOrder('video') + index)
+  }
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
     try {
-      if (publishNow && !photos.length) {
-        throw new Error(lang === 'ru' ? 'Для публикации добавьте хотя бы одну фотографию' : lang === 'az' ? 'Dərc etmək üçün ən azı bir foto əlavə edin' : 'Add at least one photo before publishing')
-      }
-      const created = await api.createListing(form)
-      for (const [index, photo] of photos.entries()) await api.uploadMedia(created.id, photo, 'image', index === 0, index)
-      if (plan) await api.uploadMedia(created.id, plan, 'floor_plan', false, 100)
-      if (video) await api.uploadMedia(created.id, video, 'video', false, 200)
-      if (publishNow) await api.publishListing(created.id)
-      setMessage(t.created); setForm(emptyListing(user?.full_name, user?.phone || '')); setPhotos([]); setPlan(null); setVideo(null)
-      setRefresh((value) => value + 1); onListingsChanged?.(); setTab('list')
+      const hasPhoto = existingMedia.some((item) => item.media_type === 'image') || photos.length > 0
+      if (((!editing && publishNow) || editing?.status === 'published') && !hasPhoto) throw new Error(t.atLeastPhoto)
+
+      const saved = editing ? await api.updateListing(editing.id, form) : await api.createListing(form)
+      await uploadNewMedia(saved.id)
+      if (!editing && publishNow) await api.publishListing(saved.id)
+      if (editing && editing.status !== 'published' && publishNow) await api.publishListing(saved.id)
+
+      setMessage(editing ? t.updated : t.created)
+      finishForm(); setRefresh((value) => value + 1); onListingsChanged?.()
     } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
   }
   const action = async (kind: 'publish' | 'archive' | 'delete', id: string) => {
@@ -142,18 +183,36 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
       setRefresh((value) => value + 1); onListingsChanged?.()
     } catch (err) { setError(err instanceof Error ? err.message : t.error) }
   }
+  const removeMedia = async (media: ListingMedia) => {
+    if (!window.confirm(t.confirmMedia)) return
+    setError('')
+    try {
+      await api.deleteMedia(media.id)
+      setExistingMedia((current) => current.filter((item) => item.id !== media.id))
+      setRefresh((value) => value + 1); onListingsChanged?.()
+    } catch (err) { setError(err instanceof Error ? err.message : t.error) }
+  }
+  const makeCover = async (media: ListingMedia) => {
+    setError('')
+    try {
+      await api.setMediaCover(media.id)
+      setExistingMedia((current) => current.map((item) => ({ ...item, is_cover: item.id === media.id })))
+      setRefresh((value) => value + 1); onListingsChanged?.()
+    } catch (err) { setError(err instanceof Error ? err.message : t.error) }
+  }
 
   return <motion.div className="account-backdrop dashboard-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
     <motion.section className="dashboard" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ ease: [0.22, 1, 0.36, 1], duration: .45 }}>
       <header><div><div className="auth-logo">ev<span>.</span></div><div><p>{user?.email}</p><h2>{t.account}</h2></div></div><button type="button" className="account-close" onClick={onClose}>×</button></header>
-      <nav><button type="button" className={tab === 'list' ? 'active' : ''} onClick={() => setTab('list')}>{t.my}<b>{listings.length}</b></button><button type="button" className={tab === 'new' ? 'active' : ''} onClick={() => setTab('new')}>{t.add}</button><button type="button" onClick={onLogout}>{t.logout}</button></nav>
+      <nav><button type="button" className={tab === 'list' ? 'active' : ''} onClick={() => setTab('list')}>{t.my}<b>{listings.length}</b></button><button type="button" className={tab === 'new' ? 'active' : ''} onClick={startCreate}>{t.add}</button>{tab === 'edit' && <button type="button" className="active">{t.editing}</button>}<button type="button" onClick={onLogout}>{t.logout}</button></nav>
       <main>
         {error && <div className="account-error">{error}</div>}{message && <div className="account-success">{message}</div>}
         {tab === 'list' ? <div className="dashboard-list">{listings.length ? listings.map((listing) => {
           const cover = listing.media.find((media) => media.is_cover) || listing.media.find((media) => media.media_type === 'image')
-          return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div>{listing.status !== 'published' && <button type="button" onClick={() => action('publish', listing.id)}>{t.publish}</button>}{listing.status === 'published' && <button type="button" onClick={() => action('archive', listing.id)}>{t.archive}</button>}<button type="button" className="danger" onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
-        }) : <div className="dashboard-empty">{t.empty}<button type="button" onClick={() => setTab('new')}>{t.add}</button></div>}</div> :
+          return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div><button type="button" className="edit" onClick={() => startEdit(listing)}>{t.edit}</button>{listing.status !== 'published' && <button type="button" onClick={() => action('publish', listing.id)}>{t.publish}</button>}{listing.status === 'published' && <button type="button" onClick={() => action('archive', listing.id)}>{t.archive}</button>}<button type="button" className="danger" onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
+        }) : <div className="dashboard-empty">{t.empty}<button type="button" onClick={startCreate}>{t.add}</button></div>}</div> :
         <form className="listing-form" onSubmit={submit}>
+          {editing && <div className="editing-banner"><div><strong>{t.editing}</strong><span>{editing.status === 'published' ? t.publishedHint : statuses[editing.status]}</span></div><button type="button" onClick={finishForm}>{t.cancel}</button></div>}
           <section><h3>{t.details}</h3><div className="form-grid">
             <label className="wide">{t.title}<input required minLength={5} value={form.title} onChange={(e) => field('title', e.target.value)} /></label>
             <label className="wide">{t.description}<textarea required minLength={20} rows={5} value={form.description} onChange={(e) => field('description', e.target.value)} /></label>
@@ -176,13 +235,38 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           <section><h3>{t.amenities}</h3><div className="check-grid">{([
             ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_parking', t.parking], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
           ] as [keyof ListingPayload, string][]).map(([name, label]) => <label key={name}><input type="checkbox" checked={Boolean(form[name])} onChange={() => toggle(name)} /><span />{label}</label>)}</div></section>
-          <section><h3>Media</h3><div className="media-inputs"><label>{t.photos}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={(e) => setPhotos(Array.from(e.target.files || []))} /><span>{photos.length ? `${photos.length} files` : 'JPG, PNG, WebP · max 15 MB'}</span></label><label>{t.plan}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => setPlan(e.target.files?.[0] || null)} /><span>{plan?.name || 'Image · max 15 MB'}</span></label><label>{t.video}<input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => setVideo(e.target.files?.[0] || null)} /><span>{video?.name || 'MP4, WebM · max 100 MB'}</span></label></div></section>
-          <section><h3>Contact</h3><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label></div></section>
-          <div className="form-submit"><label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label><button type="submit" disabled={busy}>{busy ? t.saving : publishNow ? t.createPublish : t.saveDraft}</button></div>
+          {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}
+          <section><h3>{t.addMedia}</h3><div className="media-inputs"><FileField label={t.photos} accept="image/jpeg,image/png,image/webp,image/avif" files={photos} multiple onChange={setPhotos} hint="JPG, PNG, WebP · max 15 MB" fileWord={t.files} /><FileField label={t.plan} accept="image/jpeg,image/png,image/webp,image/avif" files={plans} multiple onChange={setPlans} hint="Image · max 15 MB" fileWord={t.files} /><FileField label={t.video} accept="video/mp4,video/webm,video/quicktime" files={videos} multiple onChange={setVideos} hint="MP4, WebM · max 100 MB" fileWord={t.files} /></div></section>
+          <section><h3>{t.contact}</h3><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label></div></section>
+          <div className="form-submit">{(!editing || editing.status !== 'published') && <label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label>}<button type="submit" disabled={busy}>{busy ? t.saving : editing ? t.saveChanges : publishNow ? t.createPublish : t.saveDraft}</button></div>
         </form>}
       </main>
     </motion.section>
   </motion.div>
+}
+
+function MediaManager({ media, t, onCover, onRemove }: {
+  media: ListingMedia[]
+  t: typeof text[Lang]
+  onCover: (media: ListingMedia) => void
+  onRemove: (media: ListingMedia) => void
+}) {
+  const sections: Array<{ type: MediaType; label: string }> = [
+    { type: 'image', label: t.photos }, { type: 'floor_plan', label: t.plan }, { type: 'video', label: t.video },
+  ]
+  return <section className="existing-media"><h3>{t.currentMedia}</h3>{sections.map((section) => {
+    const items = media.filter((item) => item.media_type === section.type)
+    return <div className="existing-media__group" key={section.type}><h4>{section.label}<span>{items.length}</span></h4>{items.length ? <div className="existing-media__grid">{items.map((item) => <article key={item.id}>
+      {item.media_type === 'video' ? <video src={mediaUrl(item.url)} preload="metadata" /> : <img src={mediaUrl(item.url)} alt={item.caption || item.original_name} />}
+      <div><span title={item.original_name}>{item.original_name}</span><div>{item.media_type === 'image' && (item.is_cover ? <b>{t.cover}</b> : <button type="button" onClick={() => onCover(item)}>{t.makeCover}</button>)}<button type="button" className="danger" onClick={() => onRemove(item)}>{t.deleteMedia}</button></div></div>
+    </article>)}</div> : <p>{t.noMedia}</p>}</div>
+  })}</section>
+}
+
+function FileField({ label, accept, files, multiple, onChange, hint, fileWord }: {
+  label: string; accept: string; files: File[]; multiple?: boolean; onChange: (files: File[]) => void; hint: string; fileWord: string
+}) {
+  return <label>{label}<input type="file" accept={accept} multiple={multiple} onChange={(event) => onChange(Array.from(event.target.files || []))} /><span>{files.length ? `${files.length} ${fileWord}` : hint}</span></label>
 }
 
 function NumberField({ label, value, onChange, required = false, step = '1' }: { label: string; value: number; onChange: (value: number) => void; required?: boolean; step?: string }) {
