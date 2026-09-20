@@ -2,35 +2,69 @@ services:
   api:
     build: ./backend
     restart: unless-stopped
+
     environment:
       DATABASE_URL: sqlite+aiosqlite:////app/data/ev.db
-      SECRET_KEY: ${SECRET_KEY:-dev-only-change-this-64-character-secret-before-production-000000}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,api}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SECRET_KEY: ${SECRET_KEY:-dev-only-change-this-secret-before-production-000000}
+
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      TRUSTED_HOSTS: localhost,127.0.0.1,api
+      COOKIE_SECURE: "false"
+
+      # Название minio пока оставляем, потому что backend
+      # использует Python Minio SDK как S3-клиент.
       STORAGE_BACKEND: minio
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-evminio}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-replace-minio-password}
+
+      MINIO_ENDPOINT: garage:3900
+      MINIO_PUBLIC_ENDPOINT: localhost:9000
+
+      MINIO_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${GARAGE_SECRET_KEY}
+      MINIO_BUCKET: ev-media
+
+      MINIO_REGION: garage
+      MINIO_SECURE: "false"
+      MINIO_PUBLIC_SECURE: "false"
+
     volumes:
       - api_data:/app/data
+
     ports:
       - "8000:8000"
-    depends_on:
-      - minio
 
-  minio:
-    image: minio/minio:latest
+    depends_on:
+      - garage
+
+  garage:
+    image: dxflrs/garage:v2.4.1
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+
+    command:
+      - /garage
+      - server
+      - --single-node
+      - --default-bucket
+
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-evminio}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-replace-minio-password}
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+      GARAGE_METRICS_TOKEN: ${GARAGE_METRICS_TOKEN}
+
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: ev-media
+
+      RUST_LOG: garage=info
+
     volumes:
-      - minio_data:/data
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      # Внешне оставляем привычный порт 9000,
+      # внутри Garage слушает 3900.
+      - "9000:3900"
 
   postgres:
     image: postgres:17-alpine
@@ -47,5 +81,6 @@ services:
 
 volumes:
   api_data:
-  minio_data:
+  garage_meta:
+  garage_data:
   postgres_data:

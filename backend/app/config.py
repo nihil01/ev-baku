@@ -8,13 +8,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    cors_allow_all: bool = False
+
     app_name: str = "ev. Baku API"
     environment: str = "development"
     api_prefix: str = "/api/v1"
     secret_key: str = Field(default="change-me-in-production-please-use-64-random-characters", min_length=32)
 
     database_url: str = "sqlite+aiosqlite:///./data/ev.db"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080"
     trusted_hosts: str = "localhost,127.0.0.1,testserver"
 
     session_cookie_name: str = "ev_session"
@@ -25,11 +27,18 @@ class Settings(BaseSettings):
 
     storage_backend: str = "minio"
     local_storage_path: Path = Path("./data/uploads")
-    minio_endpoint: str = "localhost:9000"
+
+    minio_endpoint: str = "garage:3900"
+    minio_public_endpoint: str = "localhost:9000"
+
     minio_access_key: str = "evminio"
     minio_secret_key: str = "evminio-change-me"
     minio_bucket: str = "ev-media"
+
+    minio_region: str = "garage"
     minio_secure: bool = False
+    minio_public_secure: bool = False
+
     max_image_mb: int = 15
     max_video_mb: int = 100
 

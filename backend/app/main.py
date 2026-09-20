@@ -30,22 +30,44 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=[] if settings.cors_allow_all else settings.allowed_origins,
+    allow_origin_regex=r".*" if settings.cors_allow_all else None,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-CSRF-Token"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+    ],
+    allow_headers=[
+        "Accept",
+        "Content-Type",
+        "X-CSRF-Token",
+        "Authorization",
+        "X-Requested-With",
+    ],
 )
 
 
 @app.middleware("http")
 async def request_guards(request: Request, call_next):
-    if request.method in {"POST", "PATCH", "PUT", "DELETE"}:
+
+    if (
+            not settings.cors_allow_all
+            and request.method in {"POST", "PATCH", "PUT", "DELETE"}
+    ):
         origin = request.headers.get("origin")
+
         if origin and origin.rstrip("/") not in settings.allowed_origins:
-            return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Origin not allowed"},
+            )
+
     content_length = request.headers.get("content-length")
     max_request = (settings.max_video_mb + 2) * 1024 * 1024
     if content_length:

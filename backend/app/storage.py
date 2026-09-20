@@ -19,12 +19,27 @@ VIDEO_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
 class ObjectStorage:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.client = Minio(
-            settings.minio_endpoint,
-            access_key=settings.minio_access_key,
-            secret_key=settings.minio_secret_key,
-            secure=settings.minio_secure,
-        ) if settings.storage_backend == "minio" else None
+        self.client: Minio | None = None
+        self.public_client: Minio | None = None
+
+        if settings.storage_backend == "minio":
+            # Backend использует этот клиент для загрузки и удаления.
+            self.client = Minio(
+                settings.minio_endpoint,
+                access_key=settings.minio_access_key,
+                secret_key=settings.minio_secret_key,
+                secure=settings.minio_secure,
+                region=settings.minio_region,
+            )
+
+            # Этот клиент только формирует ссылки для браузера.
+            self.public_client = Minio(
+                settings.minio_public_endpoint,
+                access_key=settings.minio_access_key,
+                secret_key=settings.minio_secret_key,
+                secure=settings.minio_public_secure,
+                region=settings.minio_region,
+            )
 
     async def initialize(self) -> None:
         if self.client:
@@ -88,10 +103,11 @@ class ObjectStorage:
                 await asyncio.to_thread(os.remove, path)
 
     async def presigned_url(self, object_key: str) -> str:
-        if not self.client:
+        if not self.public_client:
             return ""
+
         return await asyncio.to_thread(
-            self.client.presigned_get_object,
+            self.public_client.presigned_get_object,
             self.settings.minio_bucket,
             object_key,
             expires=timedelta(minutes=15),
