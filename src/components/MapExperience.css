@@ -160,17 +160,16 @@
 .map-selected-card>button { height: 40px; display: flex; align-items: center; gap: 12px; padding: 0 13px; border-radius: 9px; color: #fff; background: var(--green); font-size: 8px; font-weight: 800; }
 .map-selected-card>button svg { width: 14px; }
 
-.listing-modal-backdrop { position: absolute; z-index: 40; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(10,31,27,.48); backdrop-filter: blur(8px); }
-.listing-modal { width: min(1060px,94vw); max-height: 92dvh; overflow: hidden; border: 1px solid #fff; border-radius: 25px; background: #f8f9f5; box-shadow: 0 35px 100px #0c2d2766; }
-.listing-modal>header { height: 57px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px 0 24px; border-bottom: 1px solid var(--line); }
+.listing-modal-backdrop { position: absolute; z-index: 40; inset: 0; overflow-y: auto; background: #f8f9f5; }
+.listing-modal { width: 100%; min-height: 100dvh; background: #f8f9f5; }
+.listing-modal>header { position: sticky; z-index: 5; top: 0; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 5vw; border-bottom: 1px solid var(--line); background: rgba(248,249,245,.92); backdrop-filter: blur(16px); }
 .listing-modal>header>div { display: flex; flex-direction: column; gap: 2px; }
 .listing-modal>header span { color: var(--orange); font-size: 7px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .listing-modal>header b { font-size: 9px; }
-.listing-modal>header>button { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--green); }
-.listing-modal>header svg { width: 15px; }
-.listing-modal__content { max-height: calc(92dvh - 57px); display: grid; grid-template-columns: 1.15fr .85fr; overflow: auto; }
-.listing-modal__visuals { min-width: 0; padding-bottom: 24px; background: #e8ede7; }
-.listing-modal__gallery { position: relative; height: 520px; background: #dce5dd; }
+.listing-page-back { min-height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; color: #fff; background: var(--green); font-size: 9px; font-weight: 800; }
+.listing-modal__content { width: min(1440px,100%); min-height: calc(100dvh - 64px); display: grid; grid-template-columns: minmax(0,1.15fr) minmax(380px,.85fr); margin: auto; }
+.listing-modal__visuals { min-width: 0; padding-bottom: 48px; background: #e8ede7; }
+.listing-modal__gallery { position: sticky; top: 64px; height: min(68dvh,720px); background: #dce5dd; }
 .listing-modal__gallery>img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .listing-modal__gallery>.listing-image-placeholder { display: flex!important; flex-direction: column; gap: 12px; color: #6f8b80!important; font-size: 9px; }
 .listing-modal__gallery>.listing-image-placeholder svg { width: 36px; }
@@ -190,7 +189,7 @@
 .modal-plan-grid img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .modal-video-list { display: grid; gap: 10px; }
 .modal-video-list video { width: 100%; max-height: 330px; display: block; border-radius: 10px; background: #102e28; }
-.listing-modal__info { padding: 31px; background: #f8f9f5; }
+.listing-modal__info { padding: 42px clamp(25px,4vw,64px) 64px; background: #f8f9f5; }
 .listing-modal__title { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
 .listing-modal__title>div>span { color: var(--orange); font-size: 8px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
 .listing-modal__title h2 { margin: 8px 0 5px; font-size: clamp(28px,3vw,43px); line-height: 1; letter-spacing: -.06em; }
@@ -234,9 +233,14 @@
 .modal-source a span { flex: 1; }
 .modal-source a b { font-size: 9px; white-space: nowrap; }
 .modal-source a svg { width: 14px; }
-.nearby-section>div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.nearby-section article { min-width: 0; display: grid; grid-template-columns: 29px 1fr auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid #e0e7e1; border-radius: 10px; background: #f8faf7; }
-.nearby-section article>i { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #4d806d; font-style: normal; }
+.nearby-groups { display: grid; gap: 14px; }
+.nearby-group { padding: 13px; border: 1px solid #e0e7e1; border-radius: 13px; background: #f8faf7; }
+.nearby-group h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; font-size: 9px; }
+.nearby-group h4>i { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 8px; color: #fff; background: #4d806d; font-style: normal; }
+.nearby-group h4>span { min-width: 18px; height: 18px; display: grid; place-items: center; margin-left: auto; border-radius: 999px; color: #547066; background: #e3ebe5; font-size: 7px; }
+.nearby-group>div { display: grid; gap: 3px; }
+.nearby-section article { min-width: 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 3px; border-top: 1px solid #e1e9e3; }
+.nearby-section article:first-child { border-top: 0; }
 .nearby-section article>span { min-width: 0; display: grid; gap: 2px; }
 .nearby-section article b,.nearby-section article small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nearby-section article b { font-size: 8px; }.nearby-section article small { color: #7a8b84; font-size: 6px; }
@@ -284,10 +288,11 @@
   .map-tools { right: 12px; bottom: 75px; }
   .map-selected-card { bottom: 74px; width: calc(100% - 24px); grid-template-columns: 70px 1fr auto; }
   .map-selected-card>img { width: 70px; height: 63px; }
-  .listing-modal-backdrop { align-items: end; padding: 7px; }
-  .listing-modal { width: 100%; max-height: 94dvh; border-radius: 22px 22px 12px 12px; }
-  .listing-modal__content { max-height: calc(94dvh - 57px); display: block; }
-  .listing-modal__gallery { min-height: 0; height: 38dvh; }
+  .listing-modal>header { height: 57px; padding: 0 16px; }
+  .listing-page-back { width: 38px; justify-content: center; padding: 0; font-size: 17px; }
+  .listing-page-back span { display: none; }
+  .listing-modal__content { min-height: 0; display: block; }
+  .listing-modal__gallery { position: relative; top: 0; min-height: 0; height: 44dvh; }
   .listing-modal__info { padding: 21px; }
 }
 

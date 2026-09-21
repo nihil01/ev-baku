@@ -27,13 +27,17 @@ type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
 type Bounds = { west: number; south: number; east: number; north: number }
+type NearbyGroupKey = 'markets' | 'pharmacies' | 'medical' | 'schools' | 'kindergartens' | 'transport' | 'parks'
 
 const currencySymbol: Record<Currency, string> = { AZN: '₼', USD: '$', EUR: '€', RUB: '₽' }
 const detailExtra = {
-  az: { nearby: 'Yaxınlıqdakı yerlər', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp' },
-  en: { nearby: 'Nearby places', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp' },
-  ru: { nearby: 'Что рядом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp' },
+  az: { nearby: 'Yaxınlıqda', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Xəritəyə qayıt', groups: { markets: 'Marketlər', pharmacies: 'Apteklər', medical: 'Tibbi xidmət', schools: 'Məktəblər', kindergartens: 'Uşaq bağçaları', transport: 'Metro və nəqliyyat', parks: 'Parklar və istirahət' } },
+  en: { nearby: 'Nearby', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Back to map', groups: { markets: 'Markets', pharmacies: 'Pharmacies', medical: 'Healthcare', schools: 'Schools', kindergartens: 'Kindergartens', transport: 'Metro & transport', parks: 'Parks & leisure' } },
+  ru: { nearby: 'Рядом с домом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp', backToMap: 'Вернуться к карте', groups: { markets: 'Маркеты', pharmacies: 'Аптеки', medical: 'Медицина', schools: 'Школы', kindergartens: 'Детские сады', transport: 'Метро и транспорт', parks: 'Парки и отдых' } },
 } as const
+
+const nearbyGroupOrder: NearbyGroupKey[] = ['markets', 'pharmacies', 'medical', 'schools', 'kindergartens', 'transport', 'parks']
+const nearbyGroupIcon: Record<NearbyGroupKey, string> = { markets: '⌑', pharmacies: '+', medical: '✚', schools: '⌂', kindergartens: '♧', transport: '↟', parks: '✦' }
 
 const BAKU_VIEW_BOUNDS: [[number, number], [number, number]] = [
   [49.65, 40.25],
@@ -184,6 +188,17 @@ function coverFor(listing: Listing) {
 function telegramUrl(value: string) { return `https://t.me/${value.replace(/^@/, '')}` }
 function whatsappUrl(value: string) { return `https://wa.me/${value.replace(/\D/g, '')}` }
 
+function nearbyGroupFor(place: NearbyPlace): NearbyGroupKey {
+  const category = place.category
+  if (category.startsWith('commercial.supermarket') || category.startsWith('commercial.convenience')) return 'markets'
+  if (category.startsWith('healthcare.pharmacy') || category.startsWith('commercial.health_and_beauty.pharmacy')) return 'pharmacies'
+  if (category.startsWith('healthcare.')) return 'medical'
+  if (category.startsWith('education.school')) return 'schools'
+  if (category.startsWith('childcare.kindergarten')) return 'kindergartens'
+  if (category.startsWith('public_transport.')) return 'transport'
+  return 'parks'
+}
+
 export default function MapExperience({ lang, onClose }: Props) {
   const t = copy[lang]
   const x = detailExtra[lang]
@@ -235,6 +250,17 @@ export default function MapExperience({ lang, onClose }: Props) {
     setNearby([]); setChatStatus('')
     if (detailListing) api.nearby(detailListing.id, lang).then(setNearby).catch(() => setNearby([]))
   }, [detailListing, lang])
+
+  const nearbyGroups = useMemo(() => {
+    const grouped = new globalThis.Map<NearbyGroupKey, NearbyPlace[]>()
+    nearby.forEach((place) => {
+      const key = nearbyGroupFor(place)
+      grouped.set(key, [...(grouped.get(key) || []), place])
+    })
+    return nearbyGroupOrder
+      .map((key) => ({ key, places: (grouped.get(key) || []).slice(0, 5) }))
+      .filter((group) => group.places.length > 0)
+  }, [nearby])
 
   const baseResults = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(lang)
@@ -564,11 +590,9 @@ export default function MapExperience({ lang, onClose }: Props) {
     </div>
 
     <AnimatePresence>
-      {detailListing && <motion.div className="listing-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => {
-        if (event.target === event.currentTarget) setDetailListing(null)
-      }}>
-        <motion.article className="listing-modal" role="dialog" aria-modal="true" aria-labelledby="listing-modal-title" initial={{ opacity: 0, y: 28, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: .99 }}>
-          <header><div><span>{t.available}</span><b>{localizedDistrict(detailListing.district)} · Bakı</b></div><button type="button" onClick={() => setDetailListing(null)} aria-label={t.close}><Icon name="close" /></button></header>
+      {detailListing && <motion.div className="listing-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.article className="listing-modal" aria-labelledby="listing-modal-title" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}>
+          <header><div><span>{t.available}</span><b>{localizedDistrict(detailListing.district)} · Bakı</b></div><button type="button" className="listing-page-back" onClick={() => setDetailListing(null)} aria-label={x.backToMap}>← <span>{x.backToMap}</span></button></header>
           <div className="listing-modal__content">
             <div className="listing-modal__visuals">
               <div className="listing-modal__gallery">
@@ -607,7 +631,7 @@ export default function MapExperience({ lang, onClose }: Props) {
                 <div className={detailListing.smoking_allowed ? 'allowed' : 'denied'}><i>{detailListing.smoking_allowed ? '✓' : '×'}</i><span>{detailListing.smoking_allowed ? t.smokingAllowed : t.smokingNotAllowed}</span></div>
               </div></section>
 
-              {nearby.length > 0 && <section className="modal-detail-section nearby-section"><h3>{x.nearby}</h3><div>{nearby.slice(0, 10).map((place) => <article key={place.place_id}><i>⌖</i><span><b>{place.name}</b><small>{place.category.replaceAll('.', ' · ')}</small></span><strong>{place.distance_meters} {x.distance}</strong></article>)}</div></section>}
+              {nearbyGroups.length > 0 && <section className="modal-detail-section nearby-section"><h3>{x.nearby}</h3><div className="nearby-groups">{nearbyGroups.map((group) => <section key={group.key} className="nearby-group"><h4><i>{nearbyGroupIcon[group.key]}</i>{x.groups[group.key]}<span>{group.places.length}</span></h4><div>{group.places.map((place) => <article key={place.place_id}><span><b>{place.name}</b><small>{place.address || place.category.replaceAll('.', ' · ')}</small></span><strong>{place.distance_meters} {x.distance}</strong></article>)}</div></section>)}</div></section>}
 
               <div className="modal-source"><p>{t.sourceNote}<br /><b>{detailListing.show_contact_name ? detailListing.contact_name : x.owner}</b></p><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a>{detailListing.contact_telegram && <a href={telegramUrl(detailListing.contact_telegram)} target="_blank" rel="noreferrer"><span>{x.telegram}</span><b>{detailListing.contact_telegram}</b><Icon name="arrow" /></a>}{detailListing.contact_whatsapp && <a href={whatsappUrl(detailListing.contact_whatsapp)} target="_blank" rel="noreferrer"><span>{x.whatsapp}</span><b>{detailListing.contact_whatsapp}</b><Icon name="arrow" /></a>}</div>
               {user?.id !== detailListing.owner_id && <form className="owner-chat" onSubmit={sendOwnerMessage}><h3>{x.chat}</h3><div><input name="message" maxLength={2000} required placeholder={x.message} /><button type="submit">{x.send}</button></div>{chatStatus && <p>{chatStatus}</p>}</form>}
