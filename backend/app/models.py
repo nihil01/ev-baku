@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -46,6 +46,13 @@ class MediaType(str, enum.Enum):
     video = "video"
 
 
+class Currency(str, enum.Enum):
+    AZN = "AZN"
+    USD = "USD"
+    EUR = "EUR"
+    RUB = "RUB"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -54,6 +61,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(120))
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    whatsapp: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    show_full_name: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -93,6 +103,8 @@ class Listing(Base):
     longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6))
 
     monthly_rent: Mapped[Decimal] = mapped_column(Numeric(12, 2), index=True)
+    rent_currency: Mapped[Currency] = mapped_column(Enum(Currency), default=Currency.AZN)
+    monthly_rent_azn: Mapped[Decimal] = mapped_column(Numeric(12, 2), index=True)
     deposit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     area_sqm: Mapped[Decimal] = mapped_column(Numeric(8, 2), index=True)
     rooms: Mapped[int] = mapped_column(Integer)
@@ -116,6 +128,9 @@ class Listing(Base):
 
     contact_name: Mapped[str] = mapped_column(String(120))
     contact_phone: Mapped[str] = mapped_column(String(32))
+    show_contact_name: Mapped[bool] = mapped_column(Boolean, default=True)
+    contact_telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    contact_whatsapp: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -140,3 +155,36 @@ class ListingMedia(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     listing: Mapped[Listing] = relationship(back_populates="media")
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    __table_args__ = (UniqueConstraint("user_id", "listing_id", name="uq_favorite_user_listing"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    __table_args__ = (UniqueConstraint("listing_id", "buyer_id", name="uq_conversation_listing_buyer"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id", ondelete="CASCADE"), index=True)
+    buyer_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    sender_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

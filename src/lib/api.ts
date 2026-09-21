@@ -1,6 +1,6 @@
-import type { Listing, ListingMedia, ListingPage, ListingPayload, User } from '../types/api'
+import type { ChatMessage, Conversation, Listing, ListingMedia, ListingPage, ListingPayload, NearbyPlace, User } from '../types/api'
 
-const API_BASE = 'http://localhost:8000/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 export class ApiError extends Error {
   status: number
@@ -42,6 +42,7 @@ export const api = {
   login: (email: string, password: string) => request<{ user: User; csrf_token: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (payload: { email: string; password: string; full_name: string; phone?: string }) => request<{ user: User; csrf_token: string }>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
+  updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name'>>) => request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   listings: (params: URLSearchParams) => request<ListingPage>(`/listings?${params}`),
   myListings: () => request<Listing[]>('/me/listings'),
   createListing: (payload: ListingPayload) => request<Listing>('/listings', { method: 'POST', body: JSON.stringify(payload) }),
@@ -59,6 +60,15 @@ export const api = {
   },
   setMediaCover: (mediaId: string) => request<ListingMedia>(`/media/${mediaId}/cover`, { method: 'POST' }),
   deleteMedia: (mediaId: string) => request<{ message: string }>(`/media/${mediaId}`, { method: 'DELETE' }),
+  nearby: (listingId: string, radius = 2000) => request<NearbyPlace[]>(`/listings/${listingId}/nearby?radius=${radius}`),
+  exchangeRates: () => request<{ base: 'AZN'; rates: Record<'AZN' | 'USD' | 'EUR' | 'RUB', number> }>('/exchange-rates'),
+  favorites: () => request<Listing[]>('/me/favorites'),
+  addFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'POST' }),
+  removeFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'DELETE' }),
+  conversations: () => request<Conversation[]>('/me/conversations'),
+  startConversation: (listingId: string) => request<Conversation>(`/listings/${listingId}/conversations`, { method: 'POST' }),
+  messages: (conversationId: string) => request<ChatMessage[]>(`/conversations/${conversationId}/messages`),
+  sendMessage: (conversationId: string, body: string) => request<ChatMessage>(`/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
 }
 
 export function mediaUrl(url: string) {

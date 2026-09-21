@@ -45,6 +45,25 @@ LISTING = {
 }
 
 
+class FakeExchangeRates:
+    async def rates(self):
+        from decimal import Decimal
+        return {"AZN": Decimal(1), "USD": Decimal("0.5"), "EUR": Decimal("0.4"), "RUB": Decimal(50)}
+
+    async def to_azn(self, amount, currency):
+        rates = await self.rates()
+        return amount / rates[currency.value]
+
+
+class FakeGeoapify:
+    async def nearby(self, latitude, longitude, radius=None, limit=30):
+        return [{
+            "place_id": "market-1", "name": "Test Market", "address": "Baku",
+            "latitude": latitude, "longitude": longitude, "distance_meters": 240,
+            "categories": ["commercial.supermarket"], "category": "commercial.supermarket",
+        }]
+
+
 def test_user_listing_media_publish_flow():
     with TestClient(app) as client:
         registration = client.post("/api/v1/auth/register", json={
@@ -53,6 +72,12 @@ def test_user_listing_media_publish_flow():
         assert registration.status_code == 201, registration.text
         csrf = registration.json()["csrf_token"]
         headers = {"X-CSRF-Token": csrf}
+
+        profile = client.patch("/api/v1/auth/me", headers=headers, json={
+            "telegram": "@testowner", "whatsapp": "+994501112233", "show_full_name": False,
+        })
+        assert profile.status_code == 200, profile.text
+        assert profile.json()["telegram"] == "@testowner"
 
         created = client.post("/api/v1/listings", json=LISTING, headers=headers)
         assert created.status_code == 201, created.text
@@ -97,6 +122,15 @@ def test_user_listing_media_publish_flow():
         assert published_update.json()["monthly_rent"] == 1550
         assert published_update.json()["pets_allowed"] is True
 
+        app.state.exchange_rates = FakeExchangeRates()
+        converted = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={"monthly_rent": 1000, "rent_currency": "USD"}, headers=headers,
+        )
+        assert converted.status_code == 200, converted.text
+        assert converted.json()["monthly_rent_azn"] == 2000
+        assert client.get("/api/v1/listings?price_min=1999&price_max=2001").json()["total"] == 1
+
         second_upload = client.post(
             f"/api/v1/listings/{listing_id}/media",
             headers=headers,
@@ -118,6 +152,34 @@ def test_user_listing_media_publish_flow():
         assert public.json()["items"][0]["title"] == "Updated published apartment in Baku"
         assert public.json()["items"][0]["utilities_included"] is True
         assert public.json()["items"][0]["media"][0]["url"].startswith("/api/v1/media/")
+
+        app.state.geoapify = FakeGeoapify()
+        nearby = client.get(f"/api/v1/listings/{listing_id}/nearby?radius=2000")
+        assert nearby.status_code == 200
+        assert nearby.json()[0]["distance_meters"] == 240
+
+        with TestClient(app) as buyer:
+            buyer_registration = buyer.post("/api/v1/auth/register", json={
+                "email": "buyer@example.com", "password": "securepass123", "full_name": "Test Buyer",
+            })
+            buyer_headers = {"X-CSRF-Token": buyer_registration.json()["csrf_token"]}
+            assert buyer.post(f"/api/v1/listings/{listing_id}/favorite", headers=buyer_headers).status_code == 201
+            assert buyer.get("/api/v1/me/favorites").json()[0]["id"] == listing_id
+            conversation = buyer.post(f"/api/v1/listings/{listing_id}/conversations", headers=buyer_headers)
+            assert conversation.status_code == 200, conversation.text
+            conversation_id = conversation.json()["id"]
+            sent = buyer.post(
+                f"/api/v1/conversations/{conversation_id}/messages",
+                headers=buyer_headers, json={"body": "Is this home still available?"},
+            )
+            assert sent.status_code == 201, sent.text
+            assert buyer.delete(f"/api/v1/listings/{listing_id}/favorite", headers=buyer_headers).status_code == 200
+            assert buyer.get("/api/v1/me/favorites").json() == []
+
+        owner_conversations = client.get("/api/v1/me/conversations")
+        assert owner_conversations.status_code == 200
+        assert owner_conversations.json()[0]["counterpart_name"] == "Test Buyer"
+        assert client.get(f"/api/v1/conversations/{conversation_id}/messages").json()[0]["body"].startswith("Is this")
 
         archived = client.post(f"/api/v1/listings/{listing_id}/archive", headers=headers)
         assert archived.status_code == 200

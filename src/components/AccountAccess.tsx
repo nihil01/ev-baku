@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api, mediaUrl } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import type {
   DistrictId,
+  ChatMessage,
+  Conversation,
+  Currency,
   Lang,
   Listing,
   ListingMedia,
@@ -14,7 +17,14 @@ import type {
 import './AccountAccess.css'
 
 type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void }
-type DashboardTab = 'list' | 'new' | 'edit'
+type DashboardTab = 'list' | 'new' | 'edit' | 'favorites' | 'chat' | 'profile'
+const LocationPicker = lazy(() => import('./LocationPicker'))
+
+const extra = {
+  az: { favorites: 'Seçilmişlər', chat: 'Çat', profile: 'Əlaqələr', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Ad və soyadı göstər', currency: 'Valyuta', aznEquivalent: 'AZN ekvivalenti', saved: 'Yadda saxlanıldı', send: 'Göndər', noChats: 'Hələ mesaj yoxdur', chooseChat: 'Söhbəti seçin', profileSaved: 'Profil yadda saxlanıldı' },
+  en: { favorites: 'Favorites', chat: 'Chat', profile: 'Contacts', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Show full name publicly', currency: 'Currency', aznEquivalent: 'AZN equivalent', saved: 'Saved', send: 'Send', noChats: 'No conversations yet', chooseChat: 'Choose a conversation', profileSaved: 'Profile saved' },
+  ru: { favorites: 'Избранное', chat: 'Чат', profile: 'Контакты', telegram: 'Телеграм', whatsapp: 'WhatsApp / username', showName: 'Показывать имя и фамилию', currency: 'Валюта', aznEquivalent: 'Эквивалент в AZN', saved: 'Сохранено', send: 'Отправить', noChats: 'Диалогов пока нет', chooseChat: 'Выберите диалог', profileSaved: 'Профиль сохранён' },
+} as const
 
 const text = {
   az: {
@@ -45,20 +55,22 @@ const propertyLabels: Record<Lang, Record<PropertyType, string>> = {
   ru: { studio: 'Студия', apartment: 'Квартира', house: 'Дом', villa: 'Вилла' },
 }
 
-function emptyListing(userName = '', phone = ''): ListingPayload {
+function emptyListing(userName = '', phone = '', telegram = '', whatsapp = '', showName = true): ListingPayload {
   return {
     title: '', description: '', property_type: 'apartment', district: 'yasamal', address: '',
     latitude: districtCenters.yasamal[1], longitude: districtCenters.yasamal[0], monthly_rent: 0,
+    rent_currency: 'AZN',
     deposit: null, area_sqm: 0, rooms: 2, bedrooms: 1, bathrooms: 1, max_guests: 2,
     furnished: true, floor: null, total_floors: null, has_elevator: false, has_balcony: false,
     has_parking: false, has_air_conditioning: false, has_heating: false, pets_allowed: false,
     smoking_allowed: false, utilities_included: false, minimum_lease_months: 1,
-    available_from: null, contact_name: userName, contact_phone: phone,
+    available_from: null, contact_name: userName, contact_phone: phone, show_contact_name: showName,
+    contact_telegram: telegram || null, contact_whatsapp: whatsapp || null,
   }
 }
 
 function listingPayload(listing: Listing): ListingPayload {
-  const { id: _id, owner_id: _owner, status: _status, media: _media, created_at: _created, updated_at: _updated, published_at: _published, ...payload } = listing
+  const { id: _id, owner_id: _owner, status: _status, media: _media, monthly_rent_azn: _azn, created_at: _created, updated_at: _updated, published_at: _published, ...payload } = listing
   return payload
 }
 
@@ -114,13 +126,15 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
 }
 
 function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang; onClose: () => void; onLogout: () => Promise<void>; onListingsChanged?: () => void }) {
-  const { user } = useAuth()
+  const { user, updateProfile } = useAuth()
   const t = text[lang]
+  const x = extra[lang]
   const [tab, setTab] = useState<DashboardTab>('list')
   const [listings, setListings] = useState<Listing[]>([])
   const [refresh, setRefresh] = useState(0)
   const [editing, setEditing] = useState<Listing | null>(null)
-  const [form, setForm] = useState<ListingPayload>(() => emptyListing(user?.full_name, user?.phone || ''))
+  const freshListing = () => emptyListing(user?.full_name, user?.phone || '', user?.telegram || '', user?.whatsapp || '', user?.show_full_name ?? true)
+  const [form, setForm] = useState<ListingPayload>(freshListing)
   const [existingMedia, setExistingMedia] = useState<ListingMedia[]>([])
   const [photos, setPhotos] = useState<File[]>([])
   const [plans, setPlans] = useState<File[]>([])
@@ -129,8 +143,20 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [favorites, setFavorites] = useState<Listing[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConversation, setActiveConversation] = useState<string | null>(null)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [rates, setRates] = useState<Record<Currency, number> | null>(null)
+  const [profile, setProfile] = useState({ full_name: user?.full_name || '', phone: user?.phone || '', telegram: user?.telegram || '', whatsapp: user?.whatsapp || '', show_full_name: user?.show_full_name ?? true })
 
   useEffect(() => { api.myListings().then(setListings).catch((err) => setError(err.message)) }, [refresh])
+  useEffect(() => { api.exchangeRates().then((data) => setRates(data.rates)).catch(() => setRates(null)) }, [])
+  useEffect(() => {
+    if (tab === 'favorites') api.favorites().then(setFavorites).catch((err) => setError(err.message))
+    if (tab === 'chat') api.conversations().then(setConversations).catch((err) => setError(err.message))
+  }, [tab])
+  useEffect(() => { if (activeConversation) api.messages(activeConversation).then(setChatMessages).catch((err) => setError(err.message)) }, [activeConversation])
   const statuses = useMemo(() => ({ draft: t.draft, published: t.published, archived: t.archived }), [t])
 
   const field = (name: keyof ListingPayload, value: unknown) => setForm((current) => ({ ...current, [name]: value }))
@@ -142,14 +168,14 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const clearUploads = () => { setPhotos([]); setPlans([]); setVideos([]) }
   const startCreate = () => {
     setEditing(null); setExistingMedia([]); clearUploads(); setPublishNow(true)
-    setForm(emptyListing(user?.full_name, user?.phone || '')); setMessage(''); setError(''); setTab('new')
+    setForm(freshListing()); setMessage(''); setError(''); setTab('new')
   }
   const startEdit = (listing: Listing) => {
     setEditing(listing); setExistingMedia(listing.media); clearUploads(); setPublishNow(false)
     setForm(listingPayload(listing)); setMessage(''); setError(''); setTab('edit')
   }
   const finishForm = () => {
-    setEditing(null); setExistingMedia([]); clearUploads(); setForm(emptyListing(user?.full_name, user?.phone || '')); setTab('list')
+    setEditing(null); setExistingMedia([]); clearUploads(); setForm(freshListing()); setTab('list')
   }
   const uploadNewMedia = async (listingId: string) => {
     const existingPhotos = existingMedia.filter((item) => item.media_type === 'image')
@@ -200,17 +226,31 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
       setRefresh((value) => value + 1); onListingsChanged?.()
     } catch (err) { setError(err instanceof Error ? err.message : t.error) }
   }
+  const saveProfile = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('')
+    try { await updateProfile(profile); setMessage(x.profileSaved) } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
+  }
+  const sendChat = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeConversation) return
+    const data = new FormData(event.currentTarget); const body = String(data.get('body') || '').trim()
+    if (!body) return
+    try { const item = await api.sendMessage(activeConversation, body); setChatMessages((current) => [...current, item]); event.currentTarget.reset() } catch (err) { setError(err instanceof Error ? err.message : t.error) }
+  }
 
   return <motion.div className="account-backdrop dashboard-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
     <motion.section className="dashboard" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ ease: [0.22, 1, 0.36, 1], duration: .45 }}>
       <header><div><div className="auth-logo">ev<span>.</span></div><div><p>{user?.email}</p><h2>{t.account}</h2></div></div><button type="button" className="account-close" onClick={onClose}>×</button></header>
-      <nav><button type="button" className={tab === 'list' ? 'active' : ''} onClick={() => setTab('list')}>{t.my}<b>{listings.length}</b></button><button type="button" className={tab === 'new' ? 'active' : ''} onClick={startCreate}>{t.add}</button>{tab === 'edit' && <button type="button" className="active">{t.editing}</button>}<button type="button" onClick={onLogout}>{t.logout}</button></nav>
+      <nav><button type="button" className={tab === 'list' ? 'active' : ''} onClick={() => setTab('list')}>{t.my}<b>{listings.length}</b></button><button type="button" className={tab === 'new' ? 'active' : ''} onClick={startCreate}>{t.add}</button>{tab === 'edit' && <button type="button" className="active">{t.editing}</button>}<button type="button" className={tab === 'favorites' ? 'active' : ''} onClick={() => setTab('favorites')}>{x.favorites}</button><button type="button" className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>{x.chat}</button><button type="button" className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}>{x.profile}</button><button type="button" onClick={onLogout}>{t.logout}</button></nav>
       <main>
         {error && <div className="account-error">{error}</div>}{message && <div className="account-success">{message}</div>}
         {tab === 'list' ? <div className="dashboard-list">{listings.length ? listings.map((listing) => {
           const cover = listing.media.find((media) => media.is_cover) || listing.media.find((media) => media.media_type === 'image')
           return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div><button type="button" className="edit" onClick={() => startEdit(listing)}>{t.edit}</button>{listing.status !== 'published' && <button type="button" onClick={() => action('publish', listing.id)}>{t.publish}</button>}{listing.status === 'published' && <button type="button" onClick={() => action('archive', listing.id)}>{t.archive}</button>}<button type="button" className="danger" onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
-        }) : <div className="dashboard-empty">{t.empty}<button type="button" onClick={startCreate}>{t.add}</button></div>}</div> :
+        }) : <div className="dashboard-empty">{t.empty}<button type="button" onClick={startCreate}>{t.add}</button></div>}</div> : tab === 'favorites' ?
+        <div className="dashboard-list">{favorites.length ? favorites.map((listing) => { const cover = listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image'); return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} {listing.rent_currency} · {listing.area_sqm} m²</p><div><button type="button" className="danger" onClick={async () => { await api.removeFavorite(listing.id); setFavorites((current) => current.filter((item) => item.id !== listing.id)) }}>{t.remove}</button></div></div></article> }) : <div className="dashboard-empty">{x.favorites}</div>}</div> : tab === 'chat' ?
+        <div className="chat-layout"><aside>{conversations.length ? conversations.map((item) => <button type="button" key={item.id} className={activeConversation === item.id ? 'active' : ''} onClick={() => setActiveConversation(item.id)}><b>{item.counterpart_name}</b><span>{item.listing_title}</span><small>{item.last_message?.body || '…'}</small></button>) : <p>{x.noChats}</p>}</aside><section>{activeConversation ? <><div className="chat-messages">{chatMessages.map((item) => <div key={item.id} className={item.sender_id === user?.id ? 'mine' : ''}>{item.body}<small>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></div>)}</div><form onSubmit={sendChat}><input name="body" required maxLength={2000} /><button type="submit">{x.send}</button></form></> : <div className="dashboard-empty">{x.chooseChat}</div>}</section></div> : tab === 'profile' ?
+        <form className="profile-form" onSubmit={saveProfile}><h3>{x.profile}</h3><label>{t.name}<input required value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></label><label>{t.phone}<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>{x.telegram}<input placeholder="@username" value={profile.telegram} onChange={(event) => setProfile({ ...profile, telegram: event.target.value })} /></label><label>{x.whatsapp}<input value={profile.whatsapp} onChange={(event) => setProfile({ ...profile, whatsapp: event.target.value })} /></label><label className="profile-check"><input type="checkbox" checked={profile.show_full_name} onChange={(event) => setProfile({ ...profile, show_full_name: event.target.checked })} />{x.showName}</label><button type="submit" disabled={busy}>{busy ? t.saving : t.saveChanges}</button></form> :
         <form className="listing-form" onSubmit={submit}>
           {editing && <div className="editing-banner"><div><strong>{t.editing}</strong><span>{editing.status === 'published' ? t.publishedHint : statuses[editing.status]}</span></div><button type="button" onClick={finishForm}>{t.cancel}</button></div>}
           <section><h3>{t.details}</h3><div className="form-grid">
@@ -220,6 +260,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
             <label>{t.district}<select value={form.district} onChange={(e) => changeDistrict(e.target.value as DistrictId)}>{(Object.keys(districtLabels[lang]) as DistrictId[]).map((value) => <option key={value} value={value}>{districtLabels[lang][value]}</option>)}</select></label>
             <label className="wide">{t.address}<input required value={form.address} onChange={(e) => field('address', e.target.value)} /></label>
             <NumberField label={t.rent} value={form.monthly_rent} onChange={(value) => field('monthly_rent', value)} required />
+            <label>{x.currency}<select value={form.rent_currency} onChange={(event) => field('rent_currency', event.target.value as Currency)}>{(['AZN', 'USD', 'EUR', 'RUB'] as Currency[]).map((currency) => <option key={currency}>{currency}</option>)}</select>{rates && <small className="currency-preview">{x.aznEquivalent}: ≈ {(form.monthly_rent / rates[form.rent_currency]).toLocaleString(undefined, { maximumFractionDigits: 2 })} ₼</small>}</label>
             <NumberField label={t.deposit} value={form.deposit || 0} onChange={(value) => field('deposit', value || null)} />
             <NumberField label={t.area} value={form.area_sqm} onChange={(value) => field('area_sqm', value)} required />
             <NumberField label={t.rooms} value={form.rooms} onChange={(value) => field('rooms', value)} />
@@ -231,13 +272,13 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
             <NumberField label={t.lease} value={form.minimum_lease_months} onChange={(value) => field('minimum_lease_months', value)} />
             <label>{t.available}<input type="date" value={form.available_from || ''} onChange={(e) => field('available_from', e.target.value || null)} /></label>
           </div></section>
-          <section><h3>{t.coordinates}</h3><div className="form-grid"><NumberField label="Latitude" value={form.latitude} step="0.000001" onChange={(value) => field('latitude', value)} /><NumberField label="Longitude" value={form.longitude} step="0.000001" onChange={(value) => field('longitude', value)} /></div></section>
+          <section><h3>{t.coordinates}</h3><Suspense fallback={<div className="location-loading">{t.saving}</div>}><LocationPicker lang={lang} latitude={Number(form.latitude)} longitude={Number(form.longitude)} onChange={(latitude, longitude) => setForm((current) => ({ ...current, latitude, longitude }))} /></Suspense></section>
           <section><h3>{t.amenities}</h3><div className="check-grid">{([
             ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_parking', t.parking], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
           ] as [keyof ListingPayload, string][]).map(([name, label]) => <label key={name}><input type="checkbox" checked={Boolean(form[name])} onChange={() => toggle(name)} /><span />{label}</label>)}</div></section>
           {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}
           <section><h3>{t.addMedia}</h3><div className="media-inputs"><FileField label={t.photos} accept="image/jpeg,image/png,image/webp,image/avif" files={photos} multiple onChange={setPhotos} hint="JPG, PNG, WebP · max 15 MB" fileWord={t.files} /><FileField label={t.plan} accept="image/jpeg,image/png,image/webp,image/avif" files={plans} multiple onChange={setPlans} hint="Image · max 15 MB" fileWord={t.files} /><FileField label={t.video} accept="video/mp4,video/webm,video/quicktime" files={videos} multiple onChange={setVideos} hint="MP4, WebM · max 100 MB" fileWord={t.files} /></div></section>
-          <section><h3>{t.contact}</h3><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label></div></section>
+          <section><h3>{t.contact}</h3><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={() => toggle('show_contact_name')} />{x.showName}</label></div></section>
           <div className="form-submit">{(!editing || editing.status !== 'published') && <label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label>}<button type="submit" disabled={busy}>{busy ? t.saving : editing ? t.saveChanges : publishNow ? t.createPublish : t.saveDraft}</button></div>
         </form>}
       </main>

@@ -8,6 +8,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>
   register: (payload: { email: string; password: string; full_name: string; phone?: string }) => Promise<void>
   logout: () => Promise<void>
+  updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name'>>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login: async (email, password) => setUser((await api.login(email, password)).user),
     register: async (payload) => setUser((await api.register(payload)).user),
     logout: async () => { await api.logout(); setUser(null) },
+    updateProfile: async (payload) => setUser(await api.updateProfile(payload)),
   }), [loading, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

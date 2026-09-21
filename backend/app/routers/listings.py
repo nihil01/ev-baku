@@ -8,8 +8,9 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
+from ..external import ExchangeRateService, GeoapifyService
 from ..models import District, Listing, ListingStatus, MediaType, PropertyType
-from ..schemas import ListingCreate, ListingPage, ListingRead, ListingUpdate, Message
+from ..schemas import ListingCreate, ListingPage, ListingRead, ListingUpdate, Message, NearbyPlace
 from ..serializers import listing_to_dict
 from ..storage import ObjectStorage
 
@@ -50,16 +51,16 @@ async def search_listings(
     if rooms_min is not None:
         filters.append(Listing.rooms >= rooms_min)
     if price_min is not None:
-        filters.append(Listing.monthly_rent >= price_min)
+        filters.append(Listing.monthly_rent_azn >= price_min)
     if price_max is not None:
-        filters.append(Listing.monthly_rent <= price_max)
+        filters.append(Listing.monthly_rent_azn <= price_max)
     if furnished is not None:
         filters.append(Listing.furnished == furnished)
 
     order = {
         "newest": Listing.published_at.desc(),
-        "price_asc": Listing.monthly_rent.asc(),
-        "price_desc": Listing.monthly_rent.desc(),
+        "price_asc": Listing.monthly_rent_azn.asc(),
+        "price_desc": Listing.monthly_rent_azn.desc(),
         "area_desc": Listing.area_sqm.desc(),
     }[sort]
     total = (await db.execute(select(func.count(Listing.id)).where(*filters))).scalar_one()
@@ -80,6 +81,22 @@ async def listing_detail(listing_id: str, db: AsyncSession = Depends(get_db)):
     return ListingRead.model_validate(listing_to_dict(listing))
 
 
+@router.get("/listings/{listing_id}/nearby", response_model=list[NearbyPlace])
+async def listing_nearby(
+    listing_id: str,
+    request: Request,
+    radius: int | None = Query(default=None, ge=100, le=5000),
+    db: AsyncSession = Depends(get_db),
+):
+    listing = (await db.execute(select(Listing).where(
+        Listing.id == listing_id, Listing.status == ListingStatus.published
+    ))).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    service: GeoapifyService = request.app.state.geoapify
+    return await service.nearby(float(listing.latitude), float(listing.longitude), radius)
+
+
 @router.get("/me/listings", response_model=list[ListingRead])
 async def my_listings(auth: AuthContext = Depends(current_auth), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -91,10 +108,14 @@ async def my_listings(auth: AuthContext = Depends(current_auth), db: AsyncSessio
 @router.post("/listings", response_model=ListingRead, status_code=status.HTTP_201_CREATED)
 async def create_listing(
     payload: ListingCreate,
+    request: Request,
     auth: AuthContext = Depends(csrf_protected),
     db: AsyncSession = Depends(get_db),
 ):
-    listing = Listing(owner_id=auth.user.id, status=ListingStatus.draft, **payload.model_dump())
+    values = payload.model_dump()
+    exchange: ExchangeRateService = request.app.state.exchange_rates
+    values["monthly_rent_azn"] = await exchange.to_azn(payload.monthly_rent, payload.rent_currency)
+    listing = Listing(owner_id=auth.user.id, status=ListingStatus.draft, **values)
     db.add(listing)
     await db.commit()
     await db.refresh(listing, attribute_names=["media"])
@@ -105,11 +126,18 @@ async def create_listing(
 async def update_listing(
     listing_id: str,
     payload: ListingUpdate,
+    request: Request,
     auth: AuthContext = Depends(csrf_protected),
     db: AsyncSession = Depends(get_db),
 ):
     listing = await owned_listing(listing_id, auth.user.id, db)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    values = payload.model_dump(exclude_unset=True)
+    if "monthly_rent" in values or "rent_currency" in values:
+        amount = values.get("monthly_rent", listing.monthly_rent)
+        currency = values.get("rent_currency", listing.rent_currency)
+        exchange: ExchangeRateService = request.app.state.exchange_rates
+        values["monthly_rent_azn"] = await exchange.to_azn(amount, currency)
+    for key, value in values.items():
         setattr(listing, key, value)
     listing.updated_at = datetime.now(UTC)
     await db.commit()

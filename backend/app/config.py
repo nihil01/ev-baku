@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     max_image_mb: int = 15
     max_video_mb: int = 100
 
+    geoapify_api_key: str | None = None
+    geoapify_radius_meters: int = 2000
+    exchange_rate_api_key: str | None = None
+    exchange_rate_cache_seconds: int = 21600
+
     @property
     def allowed_origins(self) -> list[str]:
         return [value.strip().rstrip("/") for value in self.cors_origins.split(",") if value.strip()]

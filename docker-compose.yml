@@ -10,6 +10,10 @@ services:
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       TRUSTED_HOSTS: localhost,127.0.0.1,api
       COOKIE_SECURE: "false"
+      GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
+      GEOAPIFY_RADIUS_METERS: ${GEOAPIFY_RADIUS_METERS:-2000}
+      EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY:-}
+      EXCHANGE_RATE_CACHE_SECONDS: ${EXCHANGE_RATE_CACHE_SECONDS:-21600}
 
       # Название minio пока оставляем, потому что backend
       # использует Python Minio SDK как S3-клиент.

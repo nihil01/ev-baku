@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator
 
-from .models import District, ListingStatus, MediaType, PropertyType, UserRole
+from .models import Currency, District, ListingStatus, MediaType, PropertyType, UserRole
 
 
 class UserRegister(BaseModel):
@@ -32,6 +32,9 @@ class UserRead(BaseModel):
     email: EmailStr
     full_name: str
     phone: str | None
+    telegram: str | None
+    whatsapp: str | None
+    show_full_name: bool
     role: UserRole
     created_at: datetime
 
@@ -39,6 +42,14 @@ class UserRead(BaseModel):
 class AuthResponse(BaseModel):
     user: UserRead
     csrf_token: str
+
+
+class UserUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    phone: str | None = Field(default=None, max_length=32)
+    telegram: str | None = Field(default=None, max_length=64)
+    whatsapp: str | None = Field(default=None, max_length=64)
+    show_full_name: bool | None = None
 
 
 class ListingBase(BaseModel):
@@ -50,6 +61,7 @@ class ListingBase(BaseModel):
     latitude: Decimal = Field(ge=Decimal("40.25"), le=Decimal("40.65"))
     longitude: Decimal = Field(ge=Decimal("49.65"), le=Decimal("50.15"))
     monthly_rent: Decimal = Field(gt=0, le=1_000_000)
+    rent_currency: Currency = Currency.AZN
     deposit: Decimal | None = Field(default=None, ge=0, le=1_000_000)
     area_sqm: Decimal = Field(gt=5, le=10_000)
     rooms: int = Field(ge=0, le=50)
@@ -71,6 +83,9 @@ class ListingBase(BaseModel):
     available_from: date | None = None
     contact_name: str = Field(min_length=2, max_length=120)
     contact_phone: str = Field(min_length=5, max_length=32)
+    show_contact_name: bool = True
+    contact_telegram: str | None = Field(default=None, max_length=64)
+    contact_whatsapp: str | None = Field(default=None, max_length=64)
 
     @field_serializer("latitude", "longitude", "monthly_rent", "deposit", "area_sqm", when_used="json")
     def serialize_decimals(self, value: Decimal | None) -> float | None:
@@ -98,6 +113,7 @@ class ListingUpdate(BaseModel):
     latitude: Decimal | None = Field(default=None, ge=Decimal("40.25"), le=Decimal("40.65"))
     longitude: Decimal | None = Field(default=None, ge=Decimal("49.65"), le=Decimal("50.15"))
     monthly_rent: Decimal | None = Field(default=None, gt=0, le=1_000_000)
+    rent_currency: Currency | None = None
     deposit: Decimal | None = Field(default=None, ge=0, le=1_000_000)
     area_sqm: Decimal | None = Field(default=None, gt=5, le=10_000)
     rooms: int | None = Field(default=None, ge=0, le=50)
@@ -119,6 +135,9 @@ class ListingUpdate(BaseModel):
     available_from: date | None = None
     contact_name: str | None = Field(default=None, min_length=2, max_length=120)
     contact_phone: str | None = Field(default=None, min_length=5, max_length=32)
+    show_contact_name: bool | None = None
+    contact_telegram: str | None = Field(default=None, max_length=64)
+    contact_whatsapp: str | None = Field(default=None, max_length=64)
 
 
 class MediaRead(BaseModel):
@@ -138,11 +157,16 @@ class ListingRead(ListingBase):
 
     id: str
     owner_id: str
+    monthly_rent_azn: Decimal
     status: ListingStatus
     media: list[MediaRead]
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None
+
+    @field_serializer("monthly_rent_azn", when_used="json")
+    def serialize_azn(self, value: Decimal) -> float:
+        return float(value)
 
 
 class ListingPage(BaseModel):
@@ -154,3 +178,43 @@ class ListingPage(BaseModel):
 
 class Message(BaseModel):
     message: str
+
+
+class NearbyPlace(BaseModel):
+    place_id: str
+    name: str
+    address: str | None
+    latitude: float | None
+    longitude: float | None
+    distance_meters: int
+    categories: list[str]
+    category: str
+
+
+class ExchangeRatesRead(BaseModel):
+    base: str = "AZN"
+    rates: dict[str, float]
+
+
+class ChatMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class ChatMessageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    conversation_id: str
+    sender_id: str
+    body: str
+    created_at: datetime
+
+
+class ConversationRead(BaseModel):
+    id: str
+    listing_id: str
+    listing_title: str
+    counterpart_name: str
+    counterpart_id: str
+    updated_at: datetime
+    last_message: ChatMessageRead | None = None

@@ -6,7 +6,8 @@ from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .database import create_schema
-from .routers import auth, listings, media
+from .external import ExchangeRateService, GeoapifyService
+from .routers import auth, external, listings, media, social
 from .storage import ObjectStorage
 
 settings = get_settings()
@@ -18,6 +19,8 @@ async def lifespan(app: FastAPI):
     storage = ObjectStorage(settings)
     await storage.initialize()
     app.state.storage = storage
+    app.state.geoapify = GeoapifyService(settings)
+    app.state.exchange_rates = ExchangeRateService(settings)
     yield
 
 
@@ -78,7 +81,7 @@ async def request_guards(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
     return response
 
 
@@ -90,3 +93,5 @@ async def health():
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(listings.router, prefix=settings.api_prefix)
 app.include_router(media.router, prefix=settings.api_prefix)
+app.include_router(social.router, prefix=settings.api_prefix)
+app.include_router(external.router, prefix=settings.api_prefix)

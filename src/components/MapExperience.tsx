@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Layer,
@@ -17,8 +17,9 @@ import {
   type District,
 } from '../data/mapConfig'
 import { api, mediaUrl } from '../lib/api'
-import type { DistrictId, Lang, Listing, PropertyType } from '../types/api'
+import type { Currency, DistrictId, Lang, Listing, NearbyPlace, PropertyType } from '../types/api'
 import AccountAccess from './AccountAccess'
+import { useAuth } from '../context/AuthContext'
 import './MapExperience.css'
 
 type Props = { lang: Lang; onClose: () => void }
@@ -26,6 +27,13 @@ type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
 type Bounds = { west: number; south: number; east: number; north: number }
+
+const currencySymbol: Record<Currency, string> = { AZN: '₼', USD: '$', EUR: '€', RUB: '₽' }
+const detailExtra = {
+  az: { nearby: 'Yaxınlıqdakı yerlər', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp' },
+  en: { nearby: 'Nearby places', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp' },
+  ru: { nearby: 'Что рядом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp' },
+} as const
 
 const BAKU_VIEW_BOUNDS: [[number, number], [number, number]] = [
   [49.65, 40.25],
@@ -173,8 +181,13 @@ function coverFor(listing: Listing) {
   return listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image')
 }
 
+function telegramUrl(value: string) { return `https://t.me/${value.replace(/^@/, '')}` }
+function whatsappUrl(value: string) { return `https://wa.me/${value.replace(/\D/g, '')}` }
+
 export default function MapExperience({ lang, onClose }: Props) {
   const t = copy[lang]
+  const x = detailExtra[lang]
+  const { user } = useAuth()
   const mapRef = useRef<MapRef | null>(null)
   const cardRefs = useRef<Record<string, HTMLElement | null>>({})
   const [layout, setLayout] = useState<Layout>('split')
@@ -198,6 +211,8 @@ export default function MapExperience({ lang, onClose }: Props) {
   const [detailListing, setDetailListing] = useState<Listing | null>(null)
   const [galleryIndex, setGalleryIndex] = useState(0)
   const [saved, setSaved] = useState<string[]>(safeSaved)
+  const [nearby, setNearby] = useState<NearbyPlace[]>([])
+  const [chatStatus, setChatStatus] = useState('')
 
   const localizedDistrict = useCallback((value: District | string) => (
     districtNames[lang][typeof value === 'string' ? value : value.id]
@@ -211,6 +226,16 @@ export default function MapExperience({ lang, onClose }: Props) {
       .finally(() => setListingsLoading(false))
   }, [listingsVersion])
 
+  useEffect(() => {
+    if (!user) return
+    api.favorites().then((items) => setSaved(items.map((item) => item.id))).catch(() => undefined)
+  }, [user])
+
+  useEffect(() => {
+    setNearby([]); setChatStatus('')
+    if (detailListing) api.nearby(detailListing.id).then(setNearby).catch(() => setNearby([]))
+  }, [detailListing])
+
   const baseResults = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(lang)
     const minimum = Number(minPrice) || 0
@@ -222,8 +247,8 @@ export default function MapExperience({ lang, onClose }: Props) {
         && (district === 'all' || listing.district === district)
         && (propertyType === 'all' || listing.property_type === propertyType)
         && (roomCount === 'all' || listing.rooms >= Number(roomCount))
-        && Number(listing.monthly_rent) >= minimum
-        && Number(listing.monthly_rent) <= maximum
+        && Number(listing.monthly_rent_azn) >= minimum
+        && Number(listing.monthly_rent_azn) <= maximum
         && (furnished === 'all' || listing.furnished === (furnished === 'yes'))
     })
   }, [district, furnished, lang, listings, localizedDistrict, maxPrice, minPrice, propertyType, query, roomCount])
@@ -233,8 +258,8 @@ export default function MapExperience({ lang, onClose }: Props) {
       ? baseResults.filter((listing) => insideBounds(listing, mapBounds))
       : baseResults
     return [...bounded].sort((a, b) => {
-      if (sort === 'priceAsc') return Number(a.monthly_rent) - Number(b.monthly_rent)
-      if (sort === 'priceDesc') return Number(b.monthly_rent) - Number(a.monthly_rent)
+      if (sort === 'priceAsc') return Number(a.monthly_rent_azn) - Number(b.monthly_rent_azn)
+      if (sort === 'priceDesc') return Number(b.monthly_rent_azn) - Number(a.monthly_rent_azn)
       if (sort === 'areaDesc') return Number(b.area_sqm) - Number(a.area_sqm)
       return Date.parse(b.published_at || b.created_at) - Date.parse(a.published_at || a.created_at)
     })
@@ -330,13 +355,31 @@ export default function MapExperience({ lang, onClose }: Props) {
     })
   }
 
-  const toggleSaved = (id: string) => {
-    setSaved((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  const toggleSaved = async (id: string) => {
+    const wasSaved = saved.includes(id)
+    setSaved((current) => wasSaved ? current.filter((item) => item !== id) : [...current, id])
+    if (user) {
+      try { if (wasSaved) await api.removeFavorite(id); else await api.addFavorite(id) }
+      catch { setSaved((current) => wasSaved ? [...current, id] : current.filter((item) => item !== id)) }
+    }
   }
 
   useEffect(() => {
     try { localStorage.setItem('ev-saved', JSON.stringify(saved)) } catch { /* Storage may be disabled. */ }
   }, [saved])
+
+  const sendOwnerMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!detailListing || !user) return setChatStatus(x.loginChat)
+    const form = event.currentTarget
+    const body = String(new FormData(form).get('message') || '').trim()
+    if (!body) return
+    try {
+      const conversation = await api.startConversation(detailListing.id)
+      await api.sendMessage(conversation.id, body)
+      form.reset(); setChatStatus(lang === 'ru' ? 'Сообщение отправлено' : lang === 'az' ? 'Mesaj göndərildi' : 'Message sent')
+    } catch (error) { setChatStatus(error instanceof Error ? error.message : 'Error') }
+  }
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -439,7 +482,7 @@ export default function MapExperience({ lang, onClose }: Props) {
                 event.stopPropagation()
                 focusListing(listing)
               }}>
-                {money(Number(listing.monthly_rent))} ₼
+                {money(Number(listing.monthly_rent))} {currencySymbol[listing.rent_currency]}
               </button>
             </Marker>
           })}
@@ -469,7 +512,7 @@ export default function MapExperience({ lang, onClose }: Props) {
             const cover = coverFor(listing)
             return <motion.article className="map-selected-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
               {cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="listing-image-placeholder"><Icon name="home" /></div>}
-              <div><span>{t.selectedHome}</span><b>{money(Number(listing.monthly_rent))} ₼ <small>{t.month}</small></b><p>{listing.rooms} {t.rooms.toLowerCase()} · {listing.area_sqm} {t.area}</p></div>
+              <div><span>{t.selectedHome}</span><b>{money(Number(listing.monthly_rent))} {currencySymbol[listing.rent_currency]} <small>{t.month}</small></b><p>{listing.rooms} {t.rooms.toLowerCase()} · {listing.area_sqm} {t.area}</p></div>
               <button type="button" onClick={() => focusListing(listing, true)}>{t.view}<Icon name="arrow" /></button>
             </motion.article>
           })()}
@@ -506,7 +549,7 @@ export default function MapExperience({ lang, onClose }: Props) {
                 <Icon name="heart" />
               </button>
               <div className="listing-card__body">
-                <div className="listing-price"><b>{money(Number(listing.monthly_rent))} ₼</b><span>{t.month}</span></div>
+                <div className="listing-price"><b>{money(Number(listing.monthly_rent))} {currencySymbol[listing.rent_currency]}</b><span>{t.month}</span></div>
                 <h2>{listing.title}</h2>
                 <p>{listing.address} · {localizedDistrict(listing.district)}</p>
                 <div className="listing-facts"><b>{listing.rooms}<small>{t.rooms}</small></b><b>{listing.area_sqm}<small>{t.area}</small></b><b>{listing.furnished ? t.yes : t.no}<small>{t.furnished}</small></b></div>
@@ -544,7 +587,7 @@ export default function MapExperience({ lang, onClose }: Props) {
             </div>
             <div className="listing-modal__info">
               <div className="listing-modal__title"><div><span>{t.details}</span><h2 id="listing-modal-title">{detailListing.title}</h2><p>{detailListing.address}</p></div><button type="button" className={saved.includes(detailListing.id) ? 'active' : ''} onClick={() => toggleSaved(detailListing.id)} aria-label={saved.includes(detailListing.id) ? t.unsave : t.save}><Icon name="heart" /></button></div>
-              <div className="modal-price"><b>{money(Number(detailListing.monthly_rent))} ₼</b><span>{t.month}</span></div>
+              <div className="modal-price"><b>{money(Number(detailListing.monthly_rent))} {currencySymbol[detailListing.rent_currency]}</b><span>{t.month}</span>{detailListing.rent_currency !== 'AZN' && <small>≈ {money(Number(detailListing.monthly_rent_azn))} ₼ {x.converted}</small>}</div>
               <div className="modal-facts"><div><b>{detailListing.rooms}</b><span>{t.rooms}</span></div><div><b>{detailListing.area_sqm} {t.area}</b><span>{['house', 'villa'].includes(detailListing.property_type) ? t.house : t.apartment}</span></div><div><b>{detailListing.furnished ? t.yes : t.no}</b><span>{t.furnished}</span></div></div>
               <p className="modal-description">{detailListing.description}</p>
 
@@ -554,7 +597,7 @@ export default function MapExperience({ lang, onClose }: Props) {
                 <div><span>{t.guests}</span><b>{detailListing.max_guests}</b></div>
                 <div><span>{t.floor}</span><b>{detailListing.floor ?? '—'}{detailListing.total_floors ? ` / ${detailListing.total_floors}` : ''}</b></div>
                 <div><span>{t.lease}</span><b>{detailListing.minimum_lease_months} {t.months}</b></div>
-                <div><span>{t.deposit}</span><b>{detailListing.deposit ? `${money(Number(detailListing.deposit))} ₼` : t.noDeposit}</b></div>
+                <div><span>{t.deposit}</span><b>{detailListing.deposit ? `${money(Number(detailListing.deposit))} ${currencySymbol[detailListing.rent_currency]}` : t.noDeposit}</b></div>
                 <div className="wide"><span>{t.availableFrom}</span><b>{localizedDate(detailListing.available_from, lang, t.notSpecified)}</b></div>
               </div></section>
 
@@ -564,7 +607,10 @@ export default function MapExperience({ lang, onClose }: Props) {
                 <div className={detailListing.smoking_allowed ? 'allowed' : 'denied'}><i>{detailListing.smoking_allowed ? '✓' : '×'}</i><span>{detailListing.smoking_allowed ? t.smokingAllowed : t.smokingNotAllowed}</span></div>
               </div></section>
 
-              <div className="modal-source"><p>{t.sourceNote}<br /><b>{detailListing.contact_name}</b></p><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a></div>
+              {nearby.length > 0 && <section className="modal-detail-section nearby-section"><h3>{x.nearby}</h3><div>{nearby.slice(0, 10).map((place) => <article key={place.place_id}><i>⌖</i><span><b>{place.name}</b><small>{place.category.replaceAll('.', ' · ')}</small></span><strong>{place.distance_meters} {x.distance}</strong></article>)}</div></section>}
+
+              <div className="modal-source"><p>{t.sourceNote}<br /><b>{detailListing.show_contact_name ? detailListing.contact_name : x.owner}</b></p><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a>{detailListing.contact_telegram && <a href={telegramUrl(detailListing.contact_telegram)} target="_blank" rel="noreferrer"><span>{x.telegram}</span><b>{detailListing.contact_telegram}</b><Icon name="arrow" /></a>}{detailListing.contact_whatsapp && <a href={whatsappUrl(detailListing.contact_whatsapp)} target="_blank" rel="noreferrer"><span>{x.whatsapp}</span><b>{detailListing.contact_whatsapp}</b><Icon name="arrow" /></a>}</div>
+              {user?.id !== detailListing.owner_id && <form className="owner-chat" onSubmit={sendOwnerMessage}><h3>{x.chat}</h3><div><input name="message" maxLength={2000} required placeholder={x.message} /><button type="submit">{x.send}</button></div>{chatStatus && <p>{chatStatus}</p>}</form>}
             </div>
           </div>
         </motion.article>

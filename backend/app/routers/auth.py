@@ -6,7 +6,7 @@ from ..config import Settings, get_settings
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
 from ..models import Session, User
-from ..schemas import AuthResponse, Message, UserLogin, UserRead, UserRegister
+from ..schemas import AuthResponse, Message, UserLogin, UserRead, UserRegister, UserUpdate
 from ..security import (
     clear_auth_cookies,
     expires_at,
@@ -71,6 +71,19 @@ async def login(
 
 @router.get("/me", response_model=UserRead)
 async def me(auth: AuthContext = Depends(current_auth)):
+    return auth.user
+
+
+@router.patch("/me", response_model=UserRead)
+async def update_me(
+    payload: UserUpdate,
+    auth: AuthContext = Depends(csrf_protected),
+    db: AsyncSession = Depends(get_db),
+):
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(auth.user, key, value.strip() if isinstance(value, str) else value)
+    await db.commit()
+    await db.refresh(auth.user)
     return auth.user
 
 

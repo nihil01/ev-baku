@@ -88,6 +88,29 @@
 .existing-media__grid button.danger { color: #a53b27; background: #ffe9e3; }
 .form-submit { position: sticky; z-index: 2; bottom: -24px; display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 0 -24px -24px; padding: 14px 24px; border-top: 1px solid #dbe3dc; background: rgba(255,255,255,.94); backdrop-filter: blur(12px); }
 .form-submit>button { min-height: 46px; padding: 0 19px; border-radius: 9px; color: #fff; background: #f07843; font-size: 9px; font-weight: 800; }
+.currency-preview { margin-top: 1px; color: #33705b; font-size: 8px; font-weight: 800; }
+.location-loading { min-height: 200px; display: grid; place-items: center; color: #72847c; font-size: 9px; }
+.profile-form { width: min(560px,100%); display: grid; gap: 13px; padding: 22px; border: 1px solid #dfe5df; border-radius: 15px; background: #fff; }
+.profile-form h3 { margin: 0 0 5px; font-size: 19px; }
+.profile-form>label { display: grid; gap: 7px; color: #667971; font-size: 8px; font-weight: 800; }
+.profile-form input { min-height: 43px; padding: 10px 12px; border: 1px solid #d7dfd8; border-radius: 9px; color: #173c34; background: #fff; font: inherit; }
+.profile-form>.profile-check,.listing-form .profile-check { display: flex; flex-direction: row; align-items: center; gap: 9px; }
+.profile-check input { width: 18px; min-height: 18px; }
+.profile-form>button { min-height: 45px; border-radius: 9px; color: #fff; background: #173c34; font-size: 9px; font-weight: 800; }
+.chat-layout { min-height: 65vh; display: grid; grid-template-columns: 250px 1fr; overflow: hidden; border: 1px solid #dce4dd; border-radius: 16px; background: #fff; }
+.chat-layout>aside { overflow-y: auto; border-right: 1px solid #e0e6e1; background: #f7f9f5; }
+.chat-layout>aside>button { width: 100%; display: grid; gap: 4px; padding: 15px; border-bottom: 1px solid #e2e8e3; text-align: left; background: transparent; }
+.chat-layout>aside>button.active { color: #fff; background: #173c34; }
+.chat-layout>aside b { font-size: 10px; }.chat-layout>aside span,.chat-layout>aside small { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; opacity: .75; }
+.chat-layout>aside>p { padding: 20px; color: #72847c; font-size: 9px; }
+.chat-layout>section { min-width: 0; display: grid; grid-template-rows: 1fr auto; }
+.chat-messages { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 18px; }
+.chat-messages>div { max-width: 78%; align-self: flex-start; padding: 10px 12px; border-radius: 12px 12px 12px 3px; color: #173c34; background: #edf2ed; font-size: 10px; line-height: 1.5; }
+.chat-messages>div.mine { align-self: flex-end; border-radius: 12px 12px 3px 12px; color: #fff; background: #173c34; }
+.chat-messages small { display: block; margin-top: 4px; font-size: 7px; opacity: .6; }
+.chat-layout>section>form { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; border-top: 1px solid #e0e6e1; }
+.chat-layout>section>form input { min-width: 0; padding: 10px; border: 1px solid #d6ded7; border-radius: 9px; }
+.chat-layout>section>form button { padding: 0 16px; border-radius: 9px; color: #fff; background: #f07843; font-size: 9px; font-weight: 800; }
 
 @media(max-width:650px) {
   .account-backdrop { padding: 10px; }
@@ -101,6 +124,8 @@
   .form-submit { bottom: -13px; margin: 0 -13px -13px; padding: 12px 13px; }
   .form-submit label { display: none; }
   .form-submit>button { width: 100%; }
+  .chat-layout { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
+  .chat-layout>aside { border-right: 0; border-bottom: 1px solid #e0e6e1; }
 }
 
 @media(prefers-reduced-motion:reduce) { .account-loading { animation: none; } }
