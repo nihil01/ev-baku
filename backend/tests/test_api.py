@@ -56,11 +56,18 @@ class FakeExchangeRates:
 
 
 class FakeGeoapify:
-    async def nearby(self, latitude, longitude, radius=None, limit=30):
+    async def nearby(self, latitude, longitude, radius=None, lang="ru"):
         return [{
             "place_id": "market-1", "name": "Test Market", "address": "Baku",
             "latitude": latitude, "longitude": longitude, "distance_meters": 240,
             "categories": ["commercial.supermarket"], "category": "commercial.supermarket",
+        }]
+
+    async def address_autocomplete(self, query, lang="ru"):
+        return [{
+            "place_id": "address-1", "label": "Nizami Street 25, Baku, Azerbaijan",
+            "street": "Nizami Street", "house_number": "25", "district": "Sabail",
+            "latitude": 40.3712, "longitude": 49.8364,
         }]
 
 
@@ -154,9 +161,12 @@ def test_user_listing_media_publish_flow():
         assert public.json()["items"][0]["media"][0]["url"].startswith("/api/v1/media/")
 
         app.state.geoapify = FakeGeoapify()
-        nearby = client.get(f"/api/v1/listings/{listing_id}/nearby?radius=2000")
+        nearby = client.get(f"/api/v1/listings/{listing_id}/nearby?radius=1000&lang=en")
         assert nearby.status_code == 200
         assert nearby.json()[0]["distance_meters"] == 240
+        addresses = client.get("/api/v1/addresses/autocomplete?q=nizami&lang=en")
+        assert addresses.status_code == 200
+        assert addresses.json()[0]["longitude"] == 49.8364
 
         with TestClient(app) as buyer:
             buyer_registration = buyer.post("/api/v1/auth/register", json={

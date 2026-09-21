@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     max_video_mb: int = 100
 
     geoapify_api_key: str | None = None
-    geoapify_radius_meters: int = 2000
+    geoapify_radius_meters: int = 1000
     exchange_rate_api_key: str | None = None
     exchange_rate_cache_seconds: int = 21600
 

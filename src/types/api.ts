@@ -90,6 +90,16 @@ export type NearbyPlace = {
   category: string
 }
 
+export type AddressSuggestion = {
+  place_id: string
+  label: string
+  street: string | null
+  house_number: string | null
+  district: string | null
+  latitude: number
+  longitude: number
+}
+
 export type ChatMessage = {
   id: string
   conversation_id: string

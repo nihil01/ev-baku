@@ -62,6 +62,13 @@
 .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
 .form-grid .wide { grid-column: 1 / -1; }
 .listing-form textarea { resize: vertical; }
+.address-autocomplete { position: relative; }
+.address-autocomplete__menu { position: absolute; z-index: 8; top: calc(100% - 1px); right: 0; left: 0; max-height: 240px; overflow-y: auto; padding: 5px; border: 1px solid #cfdbd2; border-radius: 0 0 10px 10px; background: #fff; box-shadow: 0 14px 28px #173c3420; }
+.address-autocomplete__menu button { width: 100%; display: grid; gap: 3px; padding: 10px; border-radius: 7px; text-align: left; color: #173c34; background: transparent; }
+.address-autocomplete__menu button:hover,.address-autocomplete__menu button:focus-visible { background: #edf4ee; }
+.address-autocomplete__menu b { font-size: 9px; line-height: 1.35; }
+.address-autocomplete__menu small,.address-autocomplete__loading { color: #72847c; font-size: 8px; }
+.address-autocomplete__loading { display: block; padding: 8px 10px; }
 .check-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
 .check-grid label,.form-submit label { min-height: 39px; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #dfe5df; border-radius: 9px; color: #52685f; background: #f8faf7; cursor: pointer; }
 .check-grid input,.form-submit input { position: absolute; width: 1px; min-height: 1px; opacity: 0; }

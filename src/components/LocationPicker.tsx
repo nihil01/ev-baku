@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import Map, { Marker, NavigationControl, type MapLayerMouseEvent, type MarkerDragEvent } from 'react-map-gl/maplibre'
+import { useEffect, useRef, useState } from 'react'
+import Map, { Marker, NavigationControl, type MapLayerMouseEvent, type MapRef, type MarkerDragEvent } from 'react-map-gl/maplibre'
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import type { Lang } from '../types/api'
@@ -25,6 +25,7 @@ export default function LocationPicker({ lang, latitude, longitude, onChange }: 
   const t = copy[lang]
   const [locating, setLocating] = useState(false)
   const [error, setError] = useState('')
+  const mapRef = useRef<MapRef>(null)
   const select = (lat: number, lng: number) => {
     if (!inside(lng, lat)) return setError(t.outside)
     setError('')
@@ -39,11 +40,15 @@ export default function LocationPicker({ lang, latitude, longitude, onChange }: 
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     )
   }
+  useEffect(() => {
+    mapRef.current?.flyTo({ center: [longitude, latitude], zoom: Math.max(mapRef.current.getZoom(), 13), duration: 500 })
+  }, [latitude, longitude])
   return <div className="location-picker">
     <div className="location-picker__top"><p>{t.hint}</p><button type="button" onClick={locate} disabled={locating}>◎ {locating ? t.locating : t.current}</button></div>
     {error && <div className="location-picker__error">{error}</div>}
     <div className="location-picker__map">
       <Map
+        ref={mapRef}
         mapLib={maplibregl}
         workerUrl={workerUrl}
         mapStyle="/map-style.json"

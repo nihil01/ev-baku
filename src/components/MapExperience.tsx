@@ -233,8 +233,8 @@ export default function MapExperience({ lang, onClose }: Props) {
 
   useEffect(() => {
     setNearby([]); setChatStatus('')
-    if (detailListing) api.nearby(detailListing.id).then(setNearby).catch(() => setNearby([]))
-  }, [detailListing])
+    if (detailListing) api.nearby(detailListing.id, lang).then(setNearby).catch(() => setNearby([]))
+  }, [detailListing, lang])
 
   const baseResults = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(lang)

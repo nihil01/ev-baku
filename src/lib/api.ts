@@ -1,4 +1,4 @@
-import type { ChatMessage, Conversation, Listing, ListingMedia, ListingPage, ListingPayload, NearbyPlace, User } from '../types/api'
+import type { AddressSuggestion, ChatMessage, Conversation, Listing, ListingMedia, ListingPage, ListingPayload, NearbyPlace, User } from '../types/api'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -60,7 +60,8 @@ export const api = {
   },
   setMediaCover: (mediaId: string) => request<ListingMedia>(`/media/${mediaId}/cover`, { method: 'POST' }),
   deleteMedia: (mediaId: string) => request<{ message: string }>(`/media/${mediaId}`, { method: 'DELETE' }),
-  nearby: (listingId: string, radius = 2000) => request<NearbyPlace[]>(`/listings/${listingId}/nearby?radius=${radius}`),
+  nearby: (listingId: string, lang: 'az' | 'en' | 'ru', radius = 1000) => request<NearbyPlace[]>(`/listings/${listingId}/nearby?radius=${radius}&lang=${lang}`),
+  addressAutocomplete: (query: string, lang: 'az' | 'en' | 'ru') => request<AddressSuggestion[]>(`/addresses/autocomplete?q=${encodeURIComponent(query)}&lang=${lang}`),
   exchangeRates: () => request<{ base: 'AZN'; rates: Record<'AZN' | 'USD' | 'EUR' | 'RUB', number> }>('/exchange-rates'),
   favorites: () => request<Listing[]>('/me/favorites'),
   addFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'POST' }),

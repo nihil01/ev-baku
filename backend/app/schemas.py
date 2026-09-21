@@ -191,6 +191,16 @@ class NearbyPlace(BaseModel):
     category: str
 
 
+class AddressSuggestion(BaseModel):
+    place_id: str
+    label: str
+    street: str | None
+    house_number: str | None
+    district: str | None
+    latitude: float
+    longitude: float
+
+
 class ExchangeRatesRead(BaseModel):
     base: str = "AZN"
     rates: dict[str, float]

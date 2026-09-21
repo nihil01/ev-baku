@@ -9,9 +9,32 @@ from .config import Settings
 from .models import Currency
 
 PLACE_CATEGORIES = (
-    "commercial.supermarket,public_transport,education,healthcare,"
-    "leisure.park,tourism.sights,catering"
+    "commercial.supermarket,commercial.convenience,"
+    "healthcare.pharmacy,commercial.health_and_beauty.pharmacy,"
+    "healthcare.hospital,healthcare.clinic_or_praxis,"
+    "education.school,childcare.kindergarten,"
+    "public_transport.subway,public_transport.bus,"
+    "leisure.park,leisure.playground"
 )
+
+PLACE_CATEGORY_PREFIXES = (
+    "commercial.supermarket",
+    "commercial.convenience",
+    "healthcare.pharmacy",
+    "commercial.health_and_beauty.pharmacy",
+    "healthcare.hospital",
+    "healthcare.clinic_or_praxis",
+    "education.school",
+    "childcare.kindergarten",
+    "public_transport.subway",
+    "public_transport.bus",
+    "leisure.park",
+    "leisure.playground",
+)
+
+# west, south, east, north — used by both address suggestions and the map.
+BAKU_RECT = "49.65,40.25,50.15,40.65"
+BAKU_CENTER = "49.867,40.409"
 
 
 class GeoapifyService:
@@ -19,7 +42,13 @@ class GeoapifyService:
         self.api_key = settings.geoapify_api_key
         self.default_radius = settings.geoapify_radius_meters
 
-    async def nearby(self, latitude: float, longitude: float, radius: int | None = None, limit: int = 30) -> list[dict]:
+    async def nearby(
+        self,
+        latitude: float,
+        longitude: float,
+        radius: int | None = None,
+        lang: str = "ru",
+    ) -> list[dict]:
         if not self.api_key:
             raise HTTPException(status_code=503, detail="Geoapify is not configured")
         distance = max(100, min(radius or self.default_radius, 5000))
@@ -27,7 +56,9 @@ class GeoapifyService:
             "categories": PLACE_CATEGORIES,
             "filter": f"circle:{longitude},{latitude},{distance}",
             "bias": f"proximity:{longitude},{latitude}",
-            "limit": min(limit, 50),
+            # Ask for a complete result set, then remove duplicate/unnamed OSM objects ourselves.
+            "limit": 100,
+            "lang": lang,
             "apiKey": self.api_key,
         }
         try:
@@ -37,22 +68,83 @@ class GeoapifyService:
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail="Nearby places service is temporarily unavailable") from exc
 
-        places = []
+        places_by_id: dict[str, dict] = {}
         for feature in response.json().get("features", []):
             props = feature.get("properties", {})
             coordinates = feature.get("geometry", {}).get("coordinates", [None, None])
             categories = props.get("categories") or []
-            places.append({
-                "place_id": props.get("place_id") or f"{coordinates}",
-                "name": props.get("name") or props.get("address_line1") or props.get("formatted") or "Nearby place",
+            name = str(props.get("name") or "").strip()
+            item_distance = round(float(props.get("distance") or 0))
+            # Parks and technical OSM ways often have no real public name. They are not useful
+            # in a rental listing, so do not replace them with a fake fallback name.
+            if not name or item_distance > distance:
+                continue
+            place_id = str(props.get("place_id") or "")
+            if not place_id:
+                continue
+            category = next(
+                (item for item in categories if item.startswith(PLACE_CATEGORY_PREFIXES)),
+                categories[0] if categories else "other",
+            )
+            item = {
+                "place_id": place_id,
+                "name": name,
                 "address": props.get("formatted") or props.get("address_line2"),
                 "latitude": props.get("lat", coordinates[1] if len(coordinates) > 1 else None),
                 "longitude": props.get("lon", coordinates[0] if coordinates else None),
-                "distance_meters": round(float(props.get("distance") or 0)),
+                "distance_meters": item_distance,
                 "categories": categories,
-                "category": next((item for item in categories if item.startswith(("commercial.supermarket", "public_transport", "education", "healthcare", "leisure.park", "tourism.sights", "catering"))), categories[0] if categories else "other"),
+                "category": category,
+            }
+            existing = places_by_id.get(place_id)
+            if existing is None or item["distance_meters"] < existing["distance_meters"]:
+                places_by_id[place_id] = item
+        return sorted(places_by_id.values(), key=lambda item: item["distance_meters"])
+
+    async def address_autocomplete(self, query: str, lang: str = "ru") -> list[dict]:
+        if not self.api_key:
+            raise HTTPException(status_code=503, detail="Geoapify is not configured")
+        params = {
+            "text": query,
+            "filter": f"rect:{BAKU_RECT}",
+            "bias": f"proximity:{BAKU_CENTER}",
+            "limit": 8,
+            "lang": lang,
+            "apiKey": self.api_key,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                response = await client.get(
+                    "https://api.geoapify.com/v1/geocode/autocomplete",
+                    params=params,
+                    headers={"Accept": "application/json"},
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail="Address search service is temporarily unavailable") from exc
+
+        suggestions: list[dict] = []
+        seen: set[str] = set()
+        for feature in response.json().get("features", []):
+            props = feature.get("properties", {})
+            coordinates = feature.get("geometry", {}).get("coordinates", [])
+            longitude = props.get("lon", coordinates[0] if len(coordinates) > 0 else None)
+            latitude = props.get("lat", coordinates[1] if len(coordinates) > 1 else None)
+            label = str(props.get("formatted") or "").strip()
+            place_id = str(props.get("place_id") or f"{longitude}:{latitude}")
+            if not label or latitude is None or longitude is None or place_id in seen:
+                continue
+            seen.add(place_id)
+            suggestions.append({
+                "place_id": place_id,
+                "label": label,
+                "street": props.get("street"),
+                "house_number": props.get("housenumber"),
+                "district": props.get("district") or props.get("suburb"),
+                "latitude": float(latitude),
+                "longitude": float(longitude),
             })
-        return sorted(places, key=lambda item: item["distance_meters"])
+        return suggestions
 
 
 class ExchangeRateService:

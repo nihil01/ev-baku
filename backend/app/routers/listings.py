@@ -86,6 +86,7 @@ async def listing_nearby(
     listing_id: str,
     request: Request,
     radius: int | None = Query(default=None, ge=100, le=5000),
+    lang: str = Query(default="ru", pattern="^(az|en|ru)$"),
     db: AsyncSession = Depends(get_db),
 ):
     listing = (await db.execute(select(Listing).where(
@@ -94,7 +95,7 @@ async def listing_nearby(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     service: GeoapifyService = request.app.state.geoapify
-    return await service.nearby(float(listing.latitude), float(listing.longitude), radius)
+    return await service.nearby(float(listing.latitude), float(listing.longitude), radius, lang)
 
 
 @router.get("/me/listings", response_model=list[ListingRead])

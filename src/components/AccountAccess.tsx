@@ -4,6 +4,7 @@ import { api, mediaUrl } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import type {
   DistrictId,
+  AddressSuggestion,
   ChatMessage,
   Conversation,
   Currency,
@@ -258,7 +259,18 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
             <label className="wide">{t.description}<textarea required minLength={20} rows={5} value={form.description} onChange={(e) => field('description', e.target.value)} /></label>
             <label>{t.type}<select value={form.property_type} onChange={(e) => field('property_type', e.target.value as PropertyType)}>{(Object.keys(propertyLabels[lang]) as PropertyType[]).map((value) => <option key={value} value={value}>{propertyLabels[lang][value]}</option>)}</select></label>
             <label>{t.district}<select value={form.district} onChange={(e) => changeDistrict(e.target.value as DistrictId)}>{(Object.keys(districtLabels[lang]) as DistrictId[]).map((value) => <option key={value} value={value}>{districtLabels[lang][value]}</option>)}</select></label>
-            <label className="wide">{t.address}<input required value={form.address} onChange={(e) => field('address', e.target.value)} /></label>
+            <AddressAutocomplete
+              lang={lang}
+              label={t.address}
+              value={form.address}
+              onChange={(address) => field('address', address)}
+              onSelect={(suggestion) => setForm((current) => ({
+                ...current,
+                address: suggestion.label,
+                latitude: Number(suggestion.latitude.toFixed(6)),
+                longitude: Number(suggestion.longitude.toFixed(6)),
+              }))}
+            />
             <NumberField label={t.rent} value={form.monthly_rent} onChange={(value) => field('monthly_rent', value)} required />
             <label>{x.currency}<select value={form.rent_currency} onChange={(event) => field('rent_currency', event.target.value as Currency)}>{(['AZN', 'USD', 'EUR', 'RUB'] as Currency[]).map((currency) => <option key={currency}>{currency}</option>)}</select>{rates && <small className="currency-preview">{x.aznEquivalent}: ≈ {(form.monthly_rent / rates[form.rent_currency]).toLocaleString(undefined, { maximumFractionDigits: 2 })} ₼</small>}</label>
             <NumberField label={t.deposit} value={form.deposit || 0} onChange={(value) => field('deposit', value || null)} />
@@ -308,6 +320,67 @@ function FileField({ label, accept, files, multiple, onChange, hint, fileWord }:
   label: string; accept: string; files: File[]; multiple?: boolean; onChange: (files: File[]) => void; hint: string; fileWord: string
 }) {
   return <label>{label}<input type="file" accept={accept} multiple={multiple} onChange={(event) => onChange(Array.from(event.target.files || []))} /><span>{files.length ? `${files.length} ${fileWord}` : hint}</span></label>
+}
+
+function AddressAutocomplete({ lang, label, value, onChange, onSelect }: {
+  lang: Lang
+  label: string
+  value: string
+  onChange: (value: string) => void
+  onSelect: (suggestion: AddressSuggestion) => void
+}) {
+  const [items, setItems] = useState<AddressSuggestion[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const hint = lang === 'ru'
+    ? 'Начните вводить улицу или адрес в Баку'
+    : lang === 'az'
+      ? 'Bakıda küçə və ya ünvanı yazmağa başlayın'
+      : 'Start typing a street or address in Baku'
+
+  useEffect(() => {
+    const query = value.trim()
+    if (query.length < 3) {
+      setItems([])
+      setLoading(false)
+      return
+    }
+    let active = true
+    const timer = window.setTimeout(() => {
+      setLoading(true)
+      api.addressAutocomplete(query, lang)
+        .then((suggestions) => { if (active) setItems(suggestions) })
+        .catch(() => { if (active) setItems([]) })
+        .finally(() => { if (active) setLoading(false) })
+    }, 320)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [lang, value])
+
+  return <label className="wide address-autocomplete">
+    {label}
+    <input
+      required
+      value={value}
+      placeholder={hint}
+      autoComplete="off"
+      onFocus={() => setOpen(true)}
+      onChange={(event) => { onChange(event.target.value); setOpen(true) }}
+      onBlur={() => window.setTimeout(() => setOpen(false), 160)}
+    />
+    {open && (loading || items.length > 0) && <div className="address-autocomplete__menu" role="listbox">
+      {loading && <span className="address-autocomplete__loading">…</span>}
+      {!loading && items.map((item) => <button
+        key={item.place_id}
+        type="button"
+        role="option"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => { onSelect(item); setItems([]); setOpen(false) }}
+      >
+        <b>{item.label}</b>
+        {item.district && <small>{item.district}</small>}
+      </button>)}
+    </div>}
+  </label>
 }
 
 function NumberField({ label, value, onChange, required = false, step = '1' }: { label: string; value: number; onChange: (value: number) => void; required?: boolean; step?: string }) {
