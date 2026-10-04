@@ -1,6 +1,8 @@
-import type { AddressSuggestion, ChatMessage, Conversation, Listing, ListingMedia, ListingPage, ListingPayload, NearbyPlace, User } from '../types/api'
+import type { AddressSuggestion, AiSearchResponse, ChatMessage, Conversation, ExchangeRates, Listing, ListingMedia, ListingPage, ListingPayload, User } from '../types/api'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+export const MAP_STYLE_URL = `${API_BASE}/map-style.json`
+export const BRAND_LOGO_URL = `${API_BASE}/branding/logo.png`
 
 export class ApiError extends Error {
   status: number
@@ -44,6 +46,7 @@ export const api = {
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
   updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name'>>) => request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   listings: (params: URLSearchParams) => request<ListingPage>(`/listings?${params}`),
+  aiSearch: (query: string) => request<AiSearchResponse>(`/listings/ai-search?q=${encodeURIComponent(query)}`),
   myListings: () => request<Listing[]>('/me/listings'),
   createListing: (payload: ListingPayload) => request<Listing>('/listings', { method: 'POST', body: JSON.stringify(payload) }),
   updateListing: (id: string, payload: Partial<ListingPayload>) => request<Listing>(`/listings/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
@@ -60,9 +63,8 @@ export const api = {
   },
   setMediaCover: (mediaId: string) => request<ListingMedia>(`/media/${mediaId}/cover`, { method: 'POST' }),
   deleteMedia: (mediaId: string) => request<{ message: string }>(`/media/${mediaId}`, { method: 'DELETE' }),
-  nearby: (listingId: string, lang: 'az' | 'en' | 'ru', radius = 1000) => request<NearbyPlace[]>(`/listings/${listingId}/nearby?radius=${radius}&lang=${lang}`),
   addressAutocomplete: (query: string, lang: 'az' | 'en' | 'ru') => request<AddressSuggestion[]>(`/addresses/autocomplete?q=${encodeURIComponent(query)}&lang=${lang}`),
-  exchangeRates: () => request<{ base: 'AZN'; rates: Record<'AZN' | 'USD' | 'EUR' | 'RUB', number> }>('/exchange-rates'),
+  exchangeRates: () => request<ExchangeRates>('/exchange-rates'),
   favorites: () => request<Listing[]>('/me/favorites'),
   addFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'POST' }),
   removeFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'DELETE' }),

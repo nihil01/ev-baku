@@ -44,8 +44,15 @@ class Settings(BaseSettings):
 
     geoapify_api_key: str | None = None
     geoapify_radius_meters: int = 1000
+    exchange_rate_provider: str = "exchangerate-api"
     exchange_rate_api_key: str | None = None
+    exchange_rate_base_url: str | None = None
     exchange_rate_cache_seconds: int = 21600
+
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_timeout_seconds: float = 20
 
     @property
     def allowed_origins(self) -> list[str]:

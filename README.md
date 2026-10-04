@@ -9,8 +9,11 @@ Full-stack rental marketplace for Baku: a React/MapLibre frontend, a FastAPI API
 - Live listings from the API — no hardcoded property cards or photos.
 - Search and filters for district, property type, rooms, normalized AZN rent and furniture.
 - Click/drag location picker plus browser geolocation when publishing a home.
-- Geoapify-powered nearby places within a configurable 2 km radius.
+- Geoapify-powered nearby infrastructure captured once per listing/location and served from the database without repeated provider calls.
 - AZN/USD/EUR/RUB listing prices with server-side ExchangeRate-API conversion.
+- Provider-ready currency conversion; the final bank-rate adapter can be selected through backend environment variables.
+- Optional long-stay discount tiers with an owner-side price preview and renter-side lease calculator.
+- Homepage text/voice AI search, server-side OpenAI embeddings, stored listing vectors, and a no-key text fallback.
 - Account registration and login with opaque signed session cookies (no JWT).
 - CSRF protection, strict CORS/origin checks, trusted hosts and security headers.
 - Dashboard with full listing CRUD, contacts/privacy, favorites, and listing conversations.
@@ -33,6 +36,7 @@ Requirements: Node.js 20+, Python 3.12+, Docker.
    GARAGE_SECRET_KEY=<secret-key>
    GEOAPIFY_API_KEY=<geoapify-key>
    EXCHANGE_RATE_API_KEY=<exchangerate-api-key>
+   OPENAI_API_KEY=<openai-key-optional>
    ```
 
    ```bash
@@ -70,7 +74,7 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-The provided local environment example should point the S3 client to Garage on `localhost:9000`; Docker Compose injects the internal `garage:3900` endpoint into its API container automatically. Geoapify and ExchangeRate keys remain server-side.
+The provided local environment example should point the S3 client to Garage on `localhost:9000`; Docker Compose injects the internal `garage:3900` endpoint into its API container automatically. Geoapify, exchange-rate and OpenAI keys remain server-side. If `OPENAI_API_KEY` is empty, the same AI-search endpoint automatically uses text relevance until a key is supplied.
 
 ## Use PostgreSQL later
 
@@ -119,7 +123,9 @@ ruff check app tests
 - `src/components/AccountAccess.tsx` — authentication and owner dashboard.
 - `src/lib/api.ts` — credentialed API client and CSRF header handling.
 - `src/data/mapConfig.ts` — Baku districts and boundary polygons.
-- `public/map-style.json` — the lazily fetched visual map style.
+- `backend/app/data/map-style.json` — the map style served by the API at `/api/v1/map-style.json`.
+- `backend/app/data/logo.png` — the brand logo served by the API at `/api/v1/branding/logo.png`.
+- `backend/app/ai_search.py` — OpenAI-compatible embedding adapter and text-search fallback.
 - `backend/app/main.py` — middleware, startup and API assembly.
 - `backend/app/models.py` — users, sessions, listings, favorites, chats and media models.
 - `backend/app/routers/` — auth, listing, social, external-data and media endpoints.

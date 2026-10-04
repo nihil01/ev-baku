@@ -6,24 +6,86 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..ai_search import EmbeddingService, cosine_similarity, listing_embedding_text, source_hash, text_similarity
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
 from ..external import ExchangeRateService, GeoapifyService
-from ..models import District, Listing, ListingStatus, MediaType, PropertyType
-from ..schemas import ListingCreate, ListingPage, ListingRead, ListingUpdate, Message, NearbyPlace
+from ..models import District, Listing, ListingDiscountTier, ListingEmbedding, ListingStatus, MediaType, PropertyType
+from ..schemas import (
+    AiSearchResponse,
+    DiscountTier,
+    ListingCreate,
+    ListingPage,
+    ListingRead,
+    ListingUpdate,
+    Message,
+    NearbyPlace,
+)
 from ..serializers import listing_to_dict
 from ..storage import ObjectStorage
 
 router = APIRouter(tags=["listings"])
 
 
+def listing_load_options(include_embedding: bool = False):
+    options = [selectinload(Listing.media), selectinload(Listing.discount_tiers)]
+    if include_embedding:
+        options.append(selectinload(Listing.embedding))
+    return options
+
+
 async def owned_listing(listing_id: str, owner_id: str, db: AsyncSession) -> Listing:
     listing = (await db.execute(
-        select(Listing).options(selectinload(Listing.media)).where(Listing.id == listing_id, Listing.owner_id == owner_id)
+        select(Listing).options(*listing_load_options()).where(Listing.id == listing_id, Listing.owner_id == owner_id)
     )).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     return listing
+
+
+def replace_discount_tiers(listing: Listing, tiers: list[DiscountTier]) -> None:
+    listing.discount_tiers.clear()
+    listing.discount_tiers.extend(
+        ListingDiscountTier(min_months=tier.min_months, discount_percent=tier.discount_percent)
+        for tier in tiers
+    )
+
+
+async def refresh_embedding(listing: Listing, request: Request, db: AsyncSession) -> None:
+    service: EmbeddingService = request.app.state.embeddings
+    if not service.configured:
+        return
+    text = listing_embedding_text(listing)
+    digest = source_hash(text)
+    record = await db.get(ListingEmbedding, listing.id)
+    if record and record.source_hash == digest and record.model == service.model:
+        return
+    vector = await service.embed(text)
+    if vector is None:
+        return
+    if record:
+        record.vector = vector
+        record.model = service.model
+        record.source_hash = digest
+        record.updated_at = datetime.now(UTC)
+    else:
+        db.add(ListingEmbedding(listing_id=listing.id, vector=vector, model=service.model, source_hash=digest))
+
+
+async def refresh_nearby_snapshot(listing: Listing, request: Request) -> None:
+    """Persist one provider response; displaying a listing never calls the provider."""
+    service: GeoapifyService = request.app.state.geoapify
+    try:
+        listing.nearby_places = await service.nearby(
+            float(listing.latitude),
+            float(listing.longitude),
+            lang="ru",
+        )
+        listing.nearby_updated_at = datetime.now(UTC)
+    except HTTPException:
+        # Nearby infrastructure is an enhancement and must never block listing creation.
+        listing.nearby_places = None
+        listing.nearby_updated_at = None
 
 
 @router.get("/listings", response_model=ListingPage)
@@ -65,16 +127,80 @@ async def search_listings(
     }[sort]
     total = (await db.execute(select(func.count(Listing.id)).where(*filters))).scalar_one()
     result = await db.execute(
-        select(Listing).options(selectinload(Listing.media)).where(*filters).order_by(order).offset((page - 1) * page_size).limit(page_size)
+        select(Listing).options(*listing_load_options()).where(*filters).order_by(order).offset((page - 1) * page_size).limit(page_size)
     )
     items = [ListingRead.model_validate(listing_to_dict(item)) for item in result.scalars().unique().all()]
     return ListingPage(items=items, total=total, page=page, page_size=page_size)
 
 
+@router.get("/listings/ai-search", response_model=AiSearchResponse)
+async def ai_search_listings(
+    request: Request,
+    q: str = Query(min_length=2, max_length=500),
+    limit: int = Query(default=30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    query = q.strip()
+    result = await db.execute(
+        select(Listing)
+        .options(*listing_load_options(include_embedding=True))
+        .where(Listing.status == ListingStatus.published)
+        .order_by(Listing.published_at.desc())
+    )
+    listings = result.scalars().unique().all()
+    service: EmbeddingService = request.app.state.embeddings
+    query_vector = None
+    if service.configured:
+        missing: list[tuple[Listing, str, str]] = []
+        for item in listings:
+            text = listing_embedding_text(item)
+            digest = source_hash(text)
+            if not item.embedding or item.embedding.source_hash != digest or item.embedding.model != service.model:
+                missing.append((item, text, digest))
+        vectors = await service.embed_many([query, *(text for _, text, _ in missing)])
+        if vectors:
+            query_vector = vectors[0]
+            for (item, _, digest), vector in zip(missing, vectors[1:], strict=True):
+                if item.embedding:
+                    item.embedding.vector = vector
+                    item.embedding.model = service.model
+                    item.embedding.source_hash = digest
+                    item.embedding.updated_at = datetime.now(UTC)
+                else:
+                    item.embedding = ListingEmbedding(
+                        listing_id=item.id,
+                        vector=vector,
+                        model=service.model,
+                        source_hash=digest,
+                    )
+            if missing:
+                await db.commit()
+    use_semantic = query_vector is not None and any(item.embedding for item in listings)
+
+    if use_semantic:
+        scored = [
+            (
+                cosine_similarity(query_vector, item.embedding.vector)
+                if item.embedding
+                else min(text_similarity(query, item) / 10, 0.2),
+                item,
+            )
+            for item in listings
+        ]
+        mode = "semantic"
+    else:
+        scored = [(text_similarity(query, item), item) for item in listings]
+        mode = "text"
+
+    matches = [item for score, item in sorted(scored, key=lambda pair: pair[0], reverse=True) if score > 0][:limit]
+    items = [ListingRead.model_validate(listing_to_dict(item)) for item in matches]
+    return AiSearchResponse(items=items, total=len(items), query=query, mode=mode)
+
+
 @router.get("/listings/{listing_id}", response_model=ListingRead)
 async def listing_detail(listing_id: str, db: AsyncSession = Depends(get_db)):
     listing = (await db.execute(
-        select(Listing).options(selectinload(Listing.media)).where(Listing.id == listing_id, Listing.status == ListingStatus.published)
+        select(Listing).options(*listing_load_options()).where(Listing.id == listing_id, Listing.status == ListingStatus.published)
     )).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
@@ -84,9 +210,6 @@ async def listing_detail(listing_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/listings/{listing_id}/nearby", response_model=list[NearbyPlace])
 async def listing_nearby(
     listing_id: str,
-    request: Request,
-    radius: int | None = Query(default=None, ge=100, le=5000),
-    lang: str = Query(default="ru", pattern="^(az|en|ru)$"),
     db: AsyncSession = Depends(get_db),
 ):
     listing = (await db.execute(select(Listing).where(
@@ -94,14 +217,13 @@ async def listing_nearby(
     ))).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    service: GeoapifyService = request.app.state.geoapify
-    return await service.nearby(float(listing.latitude), float(listing.longitude), radius, lang)
+    return listing.nearby_places or []
 
 
 @router.get("/me/listings", response_model=list[ListingRead])
 async def my_listings(auth: AuthContext = Depends(current_auth), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Listing).options(selectinload(Listing.media)).where(Listing.owner_id == auth.user.id).order_by(Listing.updated_at.desc())
+        select(Listing).options(*listing_load_options()).where(Listing.owner_id == auth.user.id).order_by(Listing.updated_at.desc())
     )
     return [ListingRead.model_validate(listing_to_dict(item)) for item in result.scalars().unique().all()]
 
@@ -113,13 +235,17 @@ async def create_listing(
     auth: AuthContext = Depends(csrf_protected),
     db: AsyncSession = Depends(get_db),
 ):
-    values = payload.model_dump()
+    values = payload.model_dump(exclude={"discount_tiers"})
     exchange: ExchangeRateService = request.app.state.exchange_rates
     values["monthly_rent_azn"] = await exchange.to_azn(payload.monthly_rent, payload.rent_currency)
     listing = Listing(owner_id=auth.user.id, status=ListingStatus.draft, **values)
+    replace_discount_tiers(listing, payload.discount_tiers)
     db.add(listing)
+    await db.flush()
+    await refresh_nearby_snapshot(listing, request)
+    await refresh_embedding(listing, request, db)
     await db.commit()
-    await db.refresh(listing, attribute_names=["media"])
+    await db.refresh(listing, attribute_names=["media", "discount_tiers"])
     return ListingRead.model_validate(listing_to_dict(listing))
 
 
@@ -133,6 +259,11 @@ async def update_listing(
 ):
     listing = await owned_listing(listing_id, auth.user.id, db)
     values = payload.model_dump(exclude_unset=True)
+    tiers = values.pop("discount_tiers", None)
+    location_changed = (
+        ("latitude" in values and values["latitude"] != listing.latitude)
+        or ("longitude" in values and values["longitude"] != listing.longitude)
+    )
     if "monthly_rent" in values or "rent_currency" in values:
         amount = values.get("monthly_rent", listing.monthly_rent)
         currency = values.get("rent_currency", listing.rent_currency)
@@ -140,15 +271,22 @@ async def update_listing(
         values["monthly_rent_azn"] = await exchange.to_azn(amount, currency)
     for key, value in values.items():
         setattr(listing, key, value)
+    if "discount_tiers" in payload.model_fields_set:
+        replace_discount_tiers(listing, tiers or [])
     listing.updated_at = datetime.now(UTC)
+    await db.flush()
+    if location_changed or listing.nearby_updated_at is None:
+        await refresh_nearby_snapshot(listing, request)
+    await refresh_embedding(listing, request, db)
     await db.commit()
-    await db.refresh(listing, attribute_names=["media"])
+    await db.refresh(listing, attribute_names=["media", "discount_tiers"])
     return ListingRead.model_validate(listing_to_dict(listing))
 
 
 @router.post("/listings/{listing_id}/publish", response_model=ListingRead)
 async def publish_listing(
     listing_id: str,
+    request: Request,
     auth: AuthContext = Depends(csrf_protected),
     db: AsyncSession = Depends(get_db),
 ):
@@ -157,8 +295,10 @@ async def publish_listing(
         raise HTTPException(status_code=422, detail="Upload at least one property photo before publishing")
     listing.status = ListingStatus.published
     listing.published_at = datetime.now(UTC)
+    await db.flush()
+    await refresh_embedding(listing, request, db)
     await db.commit()
-    await db.refresh(listing, attribute_names=["media"])
+    await db.refresh(listing, attribute_names=["media", "discount_tiers"])
     return ListingRead.model_validate(listing_to_dict(listing))
 
 
@@ -171,7 +311,7 @@ async def archive_listing(
     listing = await owned_listing(listing_id, auth.user.id, db)
     listing.status = ListingStatus.archived
     await db.commit()
-    await db.refresh(listing, attribute_names=["media"])
+    await db.refresh(listing, attribute_names=["media", "discount_tiers"])
     return ListingRead.model_validate(listing_to_dict(listing))
 
 

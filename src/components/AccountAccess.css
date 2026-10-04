@@ -21,6 +21,10 @@
 .account-error,.account-success { padding: 11px 13px; border-radius: 9px; font-size: 9px; line-height: 1.5; }
 .account-error { color: #9f321d; background: #ffe7e0; }
 .account-success { color: #1b664c; background: #e0f2e8; }
+.dashboard-error-boundary section { width: min(460px,100%); padding: 30px; border-radius: 20px; background: #fff; box-shadow: 0 30px 100px #0c2c2655; }
+.dashboard-error-boundary h2 { margin: 0 0 10px; font-size: 24px; }
+.dashboard-error-boundary p { margin: 0; color: #667971; font-size: 13px; line-height: 1.6; }
+.dashboard-error-boundary button { min-height: 44px; margin-top: 20px; padding: 0 16px; border-radius: 9px; color: #fff; background: #173c34; font-size: 11px; font-weight: 800; }
 
 .dashboard-backdrop { justify-items: end; padding: 0; }
 .dashboard { width: min(850px,94vw); height: 100dvh; overflow: hidden; display: grid; grid-template-rows: 74px 54px 1fr; color: #173c34; background: #f6f7f2; box-shadow: -25px 0 80px #0c2c2640; }
@@ -96,6 +100,16 @@
 .form-submit { position: sticky; z-index: 2; bottom: -24px; display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 0 -24px -24px; padding: 14px 24px; border-top: 1px solid #dbe3dc; background: rgba(255,255,255,.94); backdrop-filter: blur(12px); }
 .form-submit>button { min-height: 46px; padding: 0 19px; border-radius: 9px; color: #fff; background: #f07843; font-size: 9px; font-weight: 800; }
 .currency-preview { margin-top: 1px; color: #33705b; font-size: 8px; font-weight: 800; }
+.discount-builder__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.discount-builder__heading h3 { margin-bottom: 5px; }
+.discount-builder__heading p { max-width: 500px; margin: 0; color: #71847c; font-size: 11px; line-height: 1.5; }
+.discount-builder__heading>button { min-height: 38px; flex: 0 0 auto; padding: 0 13px; border-radius: 9px; color: #fff; background: #173c34; font-size: 10px; font-weight: 800; }
+.discount-tier-list { display: grid; gap: 8px; margin-top: 17px; }
+.discount-tier { display: grid; grid-template-columns: 1fr 1fr 1.15fr 36px; align-items: end; gap: 10px; padding: 12px; border: 1px solid #dce5dd; border-radius: 12px; background: #f6f9f5; }
+.discount-tier__preview { min-height: 46px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 11px; border-radius: 9px; color: #fff; background: #2d715b; }
+.discount-tier__preview span { font-size: 8px; opacity: .72; }
+.discount-tier__preview b { font-size: 13px; }
+.discount-tier__remove { width: 36px; height: 46px; border-radius: 9px; color: #a53b27; background: #ffe9e3; font-size: 18px; }
 .location-loading { min-height: 200px; display: grid; place-items: center; color: #72847c; font-size: 9px; }
 .profile-form { width: min(560px,100%); display: grid; gap: 13px; padding: 22px; border: 1px solid #dfe5df; border-radius: 15px; background: #fff; }
 .profile-form h3 { margin: 0 0 5px; font-size: 19px; }
@@ -133,6 +147,46 @@
   .form-submit>button { width: 100%; }
   .chat-layout { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
   .chat-layout>aside { border-right: 0; border-bottom: 1px solid #e0e6e1; }
+  .discount-builder__heading { display: grid; }
+  .discount-builder__heading>button { width: 100%; }
+  .discount-tier { grid-template-columns: 1fr 1fr; }
+  .discount-tier__preview { grid-column: 1 / -1; }
+  .discount-tier__remove { position: absolute; right: 28px; }
 }
 
 @media(prefers-reduced-motion:reduce) { .account-loading { animation: none; } }
+
+/* Larger, calmer type scale shared by authentication and the owner dashboard. */
+.account-trigger { min-height: 42px; font-size: 11px; }
+.auth-logo { border-radius: 13px; background: transparent; }
+.auth-logo svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2.7; stroke-linecap: round; stroke-linejoin: round; }
+.auth-modal>p { font-size: 10px; }
+.auth-modal form label,.listing-form label { font-size: 11px; }
+.auth-modal input,.listing-form input,.listing-form textarea,.listing-form select { min-height: 46px; font-size: 12px; }
+.auth-modal form>button,.auth-mode,.account-error,.account-success { font-size: 11px; }
+.dashboard>header p { font-size: 10px; }
+.dashboard>header h2 { font-size: 22px; }
+.dashboard>nav button { min-height: 39px; font-size: 11px; }
+.dashboard>nav b { font-size: 9px; }
+.dashboard-list h3 { font-size: 15px; }
+.dashboard-list p { font-size: 11px; }
+.dashboard-list article button,.dashboard-empty button { font-size: 10px; }
+.status { font-size: 9px; }
+.dashboard-empty { font-size: 12px; }
+.editing-banner span { font-size: 10px; }
+.editing-banner>button { font-size: 10px; }
+.listing-form h3 { font-size: 17px; }
+.address-autocomplete__menu b { font-size: 11px; }
+.address-autocomplete__menu small,.address-autocomplete__loading { font-size: 10px; }
+.media-inputs label>span,.existing-media__group>p { font-size: 9px; }
+.existing-media__group>h4 { font-size: 11px; }
+.existing-media__grid article>div>span { font-size: 10px; }
+.existing-media__grid button,.existing-media__grid b { font-size: 9px; }
+.form-submit>button,.profile-form>button { font-size: 11px; }
+.currency-preview,.location-loading { font-size: 10px; }
+.profile-form>label { font-size: 11px; }
+.chat-layout>aside b { font-size: 12px; }
+.chat-layout>aside span,.chat-layout>aside small,.chat-layout>aside>p { font-size: 10px; }
+.chat-messages>div { font-size: 12px; }
+.chat-messages small { font-size: 9px; }
+.chat-layout>section>form button { font-size: 11px; }

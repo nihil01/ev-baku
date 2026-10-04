@@ -16,28 +16,58 @@ import {
   districts,
   type District,
 } from '../data/mapConfig'
-import { api, mediaUrl } from '../lib/api'
+import { api, MAP_STYLE_URL, mediaUrl } from '../lib/api'
+import {
+  hasAvailabilityReminder,
+  removeAvailabilityReminder,
+  subscribeToAvailability,
+} from '../lib/availabilityNotifications'
 import type { Currency, DistrictId, Lang, Listing, NearbyPlace, PropertyType } from '../types/api'
 import AccountAccess from './AccountAccess'
+import HouseLogo from './HouseLogo'
 import { useAuth } from '../context/AuthContext'
 import './MapExperience.css'
 
-type Props = { lang: Lang; onClose: () => void }
+type Props = { lang: Lang; initialAiQuery?: string; onClose: () => void }
 type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
 type Bounds = { west: number; south: number; east: number; north: number }
 type NearbyGroupKey = 'markets' | 'pharmacies' | 'medical' | 'schools' | 'kindergartens' | 'transport' | 'parks'
+type NearbyAmenityKey = 'subway' | 'bus' | 'markets' | 'pharmacies' | 'medical' | 'schools' | 'kindergartens' | 'parks'
 
 const currencySymbol: Record<Currency, string> = { AZN: '₼', USD: '$', EUR: '€', RUB: '₽' }
 const detailExtra = {
-  az: { nearby: 'Yaxınlıqda', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Xəritəyə qayıt', groups: { markets: 'Marketlər', pharmacies: 'Apteklər', medical: 'Tibbi xidmət', schools: 'Məktəblər', kindergartens: 'Uşaq bağçaları', transport: 'Metro və nəqliyyat', parks: 'Parklar və istirahət' } },
-  en: { nearby: 'Nearby', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Back to map', groups: { markets: 'Markets', pharmacies: 'Pharmacies', medical: 'Healthcare', schools: 'Schools', kindergartens: 'Kindergartens', transport: 'Metro & transport', parks: 'Parks & leisure' } },
-  ru: { nearby: 'Рядом с домом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp', backToMap: 'Вернуться к карте', groups: { markets: 'Маркеты', pharmacies: 'Аптеки', medical: 'Медицина', schools: 'Школы', kindergartens: 'Детские сады', transport: 'Метро и транспорт', parks: 'Парки и отдых' } },
+  az: { nearby: 'Yaxınlıqda', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Xəritəyə qayıt', aiSearching: 'AI uyğun evləri axtarır…', aiSemantic: 'AI nəticələri', aiText: 'Mətn üzrə nəticələr', currency: 'Valyuta', discountPolicy: 'Uzunmüddətli kirayə endirimi', leaseTerm: 'Kirayə müddəti', monthlyWithDiscount: 'Endirimli aylıq qiymət', groups: { markets: 'Marketlər', pharmacies: 'Apteklər', medical: 'Tibbi xidmət', schools: 'Məktəblər', kindergartens: 'Uşaq bağçaları', transport: 'Metro və nəqliyyat', parks: 'Parklar və istirahət' } },
+  en: { nearby: 'Nearby', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Back to map', aiSearching: 'AI is matching homes…', aiSemantic: 'AI matches', aiText: 'Text matches', currency: 'Currency', discountPolicy: 'Long-stay discount', leaseTerm: 'Lease term', monthlyWithDiscount: 'Discounted monthly price', groups: { markets: 'Markets', pharmacies: 'Pharmacies', medical: 'Healthcare', schools: 'Schools', kindergartens: 'Kindergartens', transport: 'Metro & transport', parks: 'Parks & leisure' } },
+  ru: { nearby: 'Рядом с домом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp', backToMap: 'Вернуться к карте', aiSearching: 'AI подбирает подходящие квартиры…', aiSemantic: 'AI-подборка', aiText: 'Поиск по тексту', currency: 'Валюта', discountPolicy: 'Скидка за длительную аренду', leaseTerm: 'Срок аренды', monthlyWithDiscount: 'Цена в месяц со скидкой', groups: { markets: 'Маркеты', pharmacies: 'Аптеки', medical: 'Медицина', schools: 'Школы', kindergartens: 'Детские сады', transport: 'Метро и транспорт', parks: 'Парки и отдых' } },
+} as const
+
+const nearbyCopy = {
+  az: { infrastructure: 'Yaxınlıqdakı infrastruktur', notNearby: 'Yaxınlıqda tapılmadı', places: 'Yerləri göstər', amenities: { subway: 'Metro yaxınlıqda', bus: 'Dayanacaq yaxınlıqda', markets: 'Market yaxınlıqda', pharmacies: 'Aptek yaxınlıqda', medical: 'Klinika yaxınlıqda', schools: 'Məktəb yaxınlıqda', kindergartens: 'Uşaq bağçası yaxınlıqda', parks: 'Park yaxınlıqda' } },
+  en: { infrastructure: 'Nearby infrastructure', notNearby: 'Not found nearby', places: 'Show nearby places', amenities: { subway: 'Metro nearby', bus: 'Bus stop nearby', markets: 'Market nearby', pharmacies: 'Pharmacy nearby', medical: 'Clinic nearby', schools: 'School nearby', kindergartens: 'Kindergarten nearby', parks: 'Park nearby' } },
+  ru: { infrastructure: 'Инфраструктура рядом', notNearby: 'Рядом не найдено', places: 'Показать места рядом', amenities: { subway: 'Метро рядом', bus: 'Остановка рядом', markets: 'Маркет рядом', pharmacies: 'Аптека рядом', medical: 'Клиника рядом', schools: 'Школа рядом', kindergartens: 'Детский сад рядом', parks: 'Парк рядом' } },
+} as const
+
+const availabilityCopy = {
+  az: { title: 'Hələ mövcud deyil', text: 'Bu ev {date} tarixindən kirayə üçün açılacaq.', notify: 'Mövcud olduqda bildir', active: 'Bildiriş aktivdir · ləğv et', subscribed: 'Brauzer bildirişi aktivləşdirildi.', cancelled: 'Bildiriş ləğv edildi.', denied: 'Brauzer bildirişlərinə icazə verilməyib.', unsupported: 'Bu brauzer bildirişləri dəstəkləmir.' },
+  en: { title: 'Not available yet', text: 'This home will become available on {date}.', notify: 'Notify me when available', active: 'Notification on · cancel', subscribed: 'Browser notification enabled.', cancelled: 'Notification cancelled.', denied: 'Browser notifications are not permitted.', unsupported: 'This browser does not support notifications.' },
+  ru: { title: 'Пока недоступна', text: 'Квартира освободится {date}.', notify: 'Уведомить, когда доступна', active: 'Уведомление включено · отменить', subscribed: 'Уведомление браузера включено.', cancelled: 'Уведомление отменено.', denied: 'Браузер не разрешил уведомления.', unsupported: 'Этот браузер не поддерживает уведомления.' },
 } as const
 
 const nearbyGroupOrder: NearbyGroupKey[] = ['markets', 'pharmacies', 'medical', 'schools', 'kindergartens', 'transport', 'parks']
 const nearbyGroupIcon: Record<NearbyGroupKey, string> = { markets: '⌑', pharmacies: '+', medical: '✚', schools: '⌂', kindergartens: '♧', transport: '↟', parks: '✦' }
+const nearbyAmenityOrder: NearbyAmenityKey[] = ['subway', 'bus', 'markets', 'pharmacies', 'medical', 'schools', 'kindergartens', 'parks']
+const nearbyAmenityPrefixes: Record<NearbyAmenityKey, string[]> = {
+  subway: ['public_transport.subway'],
+  bus: ['public_transport.bus'],
+  markets: ['commercial.supermarket', 'commercial.convenience'],
+  pharmacies: ['healthcare.pharmacy', 'commercial.health_and_beauty.pharmacy'],
+  medical: ['healthcare.hospital', 'healthcare.clinic_or_praxis'],
+  schools: ['education.school'],
+  kindergartens: ['childcare.kindergarten'],
+  parks: ['leisure.park', 'leisure.playground'],
+}
 
 const BAKU_VIEW_BOUNDS: [[number, number], [number, number]] = [
   [49.65, 40.25],
@@ -130,8 +160,18 @@ const outlineLayer = {
   paint: { 'line-color': '#397a5a', 'line-width': 1.15, 'line-opacity': 0.32, 'line-dasharray': [3, 2] },
 } as const
 
+const selectedDistrictFillLayer = {
+  id: 'selected-district-fill', type: 'fill',
+  paint: { 'fill-color': '#1d7655', 'fill-opacity': 0.26 },
+} as const
+
+const selectedDistrictOutlineLayer = {
+  id: 'selected-district-outline', type: 'line',
+  paint: { 'line-color': '#0f5a40', 'line-width': 3, 'line-opacity': 0.9 },
+} as const
+
 const buildingsLayer = {
-  id: 'buildings-3d', source: 'carto', 'source-layer': 'building', type: 'fill-extrusion', minzoom: 13.8,
+  id: 'buildings-3d', source: 'openmaptiles', 'source-layer': 'building', type: 'fill-extrusion', minzoom: 13.8,
   paint: {
     'fill-extrusion-color': '#d2d8cf',
     'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13.8, 0, 15, ['coalesce', ['get', 'render_height'], 12]],
@@ -167,6 +207,14 @@ function localizedDate(value: string | null, lang: Lang, fallback: string) {
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day))
 }
 
+function localDateKey() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function safeSaved(): string[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem('ev-saved') || '[]')
@@ -181,6 +229,10 @@ function insideBounds(listing: Listing, bounds: Bounds | null) {
   return lng >= bounds.west && lng <= bounds.east && lat >= bounds.south && lat <= bounds.north
 }
 
+function boundsForDistrict(id: string): [[number, number], [number, number]] | null {
+  return districts.find((item) => item.id === id)?.bounds || null
+}
+
 function coverFor(listing: Listing) {
   return listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image')
 }
@@ -188,26 +240,36 @@ function coverFor(listing: Listing) {
 function telegramUrl(value: string) { return `https://t.me/${value.replace(/^@/, '')}` }
 function whatsappUrl(value: string) { return `https://wa.me/${value.replace(/\D/g, '')}` }
 
+function placeMatches(place: NearbyPlace, prefixes: string[]) {
+  return [place.category, ...place.categories].some((category) => prefixes.some((prefix) => category.startsWith(prefix)))
+}
+
 function nearbyGroupFor(place: NearbyPlace): NearbyGroupKey {
-  const category = place.category
-  if (category.startsWith('commercial.supermarket') || category.startsWith('commercial.convenience')) return 'markets'
-  if (category.startsWith('healthcare.pharmacy') || category.startsWith('commercial.health_and_beauty.pharmacy')) return 'pharmacies'
-  if (category.startsWith('healthcare.')) return 'medical'
-  if (category.startsWith('education.school')) return 'schools'
-  if (category.startsWith('childcare.kindergarten')) return 'kindergartens'
-  if (category.startsWith('public_transport.')) return 'transport'
+  if (placeMatches(place, nearbyAmenityPrefixes.markets)) return 'markets'
+  if (placeMatches(place, nearbyAmenityPrefixes.pharmacies)) return 'pharmacies'
+  if (placeMatches(place, nearbyAmenityPrefixes.medical)) return 'medical'
+  if (placeMatches(place, nearbyAmenityPrefixes.schools)) return 'schools'
+  if (placeMatches(place, nearbyAmenityPrefixes.kindergartens)) return 'kindergartens'
+  if (placeMatches(place, [...nearbyAmenityPrefixes.subway, ...nearbyAmenityPrefixes.bus])) return 'transport'
   return 'parks'
 }
 
-export default function MapExperience({ lang, onClose }: Props) {
+export default function MapExperience({ lang, initialAiQuery = '', onClose }: Props) {
   const t = copy[lang]
   const x = detailExtra[lang]
+  const nearbyText = nearbyCopy[lang]
+  const availabilityText = availabilityCopy[lang]
   const { user } = useAuth()
   const mapRef = useRef<MapRef | null>(null)
   const cardRefs = useRef<Record<string, HTMLElement | null>>({})
   const [layout, setLayout] = useState<Layout>('split')
   const [query, setQuery] = useState('')
-  const [district, setDistrict] = useState('all')
+  const [aiResults, setAiResults] = useState<Listing[] | null>(null)
+  const [aiMode, setAiMode] = useState<'semantic' | 'text' | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [displayCurrency, setDisplayCurrency] = useState<Currency>(() => (localStorage.getItem('ev-currency') as Currency) || 'AZN')
+  const [exchangeRates, setExchangeRates] = useState<Record<Currency, number> | null>(null)
+  const [district, setDistrict] = useState<'all' | DistrictId>('all')
   const [propertyType, setPropertyType] = useState<PropertyFilter>('all')
   const [roomCount, setRoomCount] = useState('all')
   const [minPrice, setMinPrice] = useState('')
@@ -226,8 +288,10 @@ export default function MapExperience({ lang, onClose }: Props) {
   const [detailListing, setDetailListing] = useState<Listing | null>(null)
   const [galleryIndex, setGalleryIndex] = useState(0)
   const [saved, setSaved] = useState<string[]>(safeSaved)
-  const [nearby, setNearby] = useState<NearbyPlace[]>([])
   const [chatStatus, setChatStatus] = useState('')
+  const [leaseMonths, setLeaseMonths] = useState(1)
+  const [availabilitySubscribed, setAvailabilitySubscribed] = useState(false)
+  const [availabilityStatus, setAvailabilityStatus] = useState('')
 
   const localizedDistrict = useCallback((value: District | string) => (
     districtNames[lang][typeof value === 'string' ? value : value.id]
@@ -241,16 +305,50 @@ export default function MapExperience({ lang, onClose }: Props) {
       .finally(() => setListingsLoading(false))
   }, [listingsVersion])
 
+  useEffect(() => { api.exchangeRates().then((data) => setExchangeRates(data.rates)).catch(() => setExchangeRates(null)) }, [])
+  useEffect(() => { localStorage.setItem('ev-currency', displayCurrency) }, [displayCurrency])
+
+  const runAiSearch = useCallback(async (value: string) => {
+    const clean = value.trim()
+    if (!clean) return
+    setAiBusy(true); setQuery(clean)
+    try {
+      const result = await api.aiSearch(clean)
+      setAiResults(result.items); setAiMode(result.mode); setListingsError('')
+    } catch (error) {
+      setAiResults([]); setAiMode(null); setListingsError(error instanceof Error ? error.message : 'AI search unavailable')
+    } finally { setAiBusy(false) }
+  }, [])
+
+  useEffect(() => { if (initialAiQuery) void runAiSearch(initialAiQuery) }, [initialAiQuery, runAiSearch])
+
+  useEffect(() => {
+    const fallback = window.setTimeout(() => setLoaded(true), 2800)
+    return () => window.clearTimeout(fallback)
+  }, [])
+
   useEffect(() => {
     if (!user) return
     api.favorites().then((items) => setSaved(items.map((item) => item.id))).catch(() => undefined)
   }, [user])
 
   useEffect(() => {
-    setNearby([]); setChatStatus('')
-    if (detailListing) api.nearby(detailListing.id, lang).then(setNearby).catch(() => setNearby([]))
-  }, [detailListing, lang])
+    setChatStatus('')
+    setAvailabilityStatus('')
+    setAvailabilitySubscribed(Boolean(
+      detailListing && hasAvailabilityReminder(detailListing.id, detailListing.available_from),
+    ))
+    if (detailListing) {
+      setLeaseMonths(detailListing.minimum_lease_months)
+    }
+  }, [detailListing])
 
+  const priceFor = useCallback((listing: Listing) => {
+    if (!exchangeRates) return { value: Number(listing.monthly_rent), currency: listing.rent_currency }
+    return { value: Number(listing.monthly_rent_azn) * exchangeRates[displayCurrency], currency: displayCurrency }
+  }, [displayCurrency, exchangeRates])
+
+  const nearby = useMemo(() => detailListing?.nearby_places || [], [detailListing])
   const nearbyGroups = useMemo(() => {
     const grouped = new globalThis.Map<NearbyGroupKey, NearbyPlace[]>()
     nearby.forEach((place) => {
@@ -258,18 +356,24 @@ export default function MapExperience({ lang, onClose }: Props) {
       grouped.set(key, [...(grouped.get(key) || []), place])
     })
     return nearbyGroupOrder
-      .map((key) => ({ key, places: (grouped.get(key) || []).slice(0, 5) }))
+      .map((key) => ({ key, places: (grouped.get(key) || []).slice(0, 3) }))
       .filter((group) => group.places.length > 0)
   }, [nearby])
+  const nearbyAmenities = useMemo(() => nearbyAmenityOrder.map((key) => ({
+    key,
+    place: nearby.filter((place) => placeMatches(place, nearbyAmenityPrefixes[key]))
+      .sort((left, right) => left.distance_meters - right.distance_meters)[0] || null,
+  })), [nearby])
 
   const baseResults = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(lang)
-    const minimum = Number(minPrice) || 0
-    const maximum = Number(maxPrice) || Number.POSITIVE_INFINITY
+    const displayRate = exchangeRates?.[displayCurrency] || 1
+    const minimum = (Number(minPrice) || 0) / displayRate
+    const maximum = maxPrice ? Number(maxPrice) / displayRate : Number.POSITIVE_INFINITY
 
-    return listings.filter((listing) => {
+    return (aiResults ?? listings).filter((listing) => {
       const searchable = `${listing.title} ${listing.address} ${listing.description} ${localizedDistrict(listing.district)}`.toLocaleLowerCase(lang)
-      return (!normalizedQuery || searchable.includes(normalizedQuery))
+      return (aiResults !== null || !normalizedQuery || searchable.includes(normalizedQuery))
         && (district === 'all' || listing.district === district)
         && (propertyType === 'all' || listing.property_type === propertyType)
         && (roomCount === 'all' || listing.rooms >= Number(roomCount))
@@ -277,7 +381,7 @@ export default function MapExperience({ lang, onClose }: Props) {
         && Number(listing.monthly_rent_azn) <= maximum
         && (furnished === 'all' || listing.furnished === (furnished === 'yes'))
     })
-  }, [district, furnished, lang, listings, localizedDistrict, maxPrice, minPrice, propertyType, query, roomCount])
+  }, [aiResults, district, displayCurrency, exchangeRates, furnished, lang, listings, localizedDistrict, maxPrice, minPrice, propertyType, query, roomCount])
 
   const visibleResults = useMemo(() => {
     const bounded = syncToMap && layout !== 'list'
@@ -322,16 +426,20 @@ export default function MapExperience({ lang, onClose }: Props) {
   }, [mapPadding, tilted])
 
   const selectDistrict = (id: string) => {
-    setDistrict(id)
+    const nextDistrict = id === 'all' ? 'all' : id as DistrictId
+    setDistrict(nextDistrict)
     setSelectedListing(null)
-    if (id === 'all') showOverview()
+    setMapBounds(null)
+    if (nextDistrict === 'all') showOverview()
     else {
-      const districtListings = listings.filter((listing) => listing.district === id)
-      if (districtListings.length) fitListings(districtListings)
-      else {
-        const center = districts.find((item) => item.id === id)?.center
-        if (center) mapRef.current?.flyTo({ center, zoom: 13, duration: 600 })
-      }
+      const bounds = boundsForDistrict(nextDistrict)
+      if (bounds) mapRef.current?.fitBounds(bounds, {
+        padding: mapPadding(),
+        maxZoom: 13.4,
+        pitch: tilted ? 38 : 0,
+        bearing: tilted ? -10 : 0,
+        duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 750,
+      })
     }
   }
 
@@ -357,6 +465,7 @@ export default function MapExperience({ lang, onClose }: Props) {
 
   const clearFilters = () => {
     setQuery('')
+    setAiResults(null); setAiMode(null)
     setDistrict('all')
     setPropertyType('all')
     setRoomCount('all')
@@ -407,6 +516,23 @@ export default function MapExperience({ lang, onClose }: Props) {
     } catch (error) { setChatStatus(error instanceof Error ? error.message : 'Error') }
   }
 
+  const toggleAvailabilityNotification = async () => {
+    if (!detailListing?.available_from) return
+    if (availabilitySubscribed) {
+      removeAvailabilityReminder(detailListing.id)
+      setAvailabilitySubscribed(false)
+      setAvailabilityStatus(availabilityText.cancelled)
+      return
+    }
+    const result = await subscribeToAvailability(detailListing, lang)
+    if (result === 'subscribed') {
+      setAvailabilitySubscribed(true)
+      setAvailabilityStatus(availabilityText.subscribed)
+    } else {
+      setAvailabilityStatus(result === 'denied' ? availabilityText.denied : availabilityText.unsupported)
+    }
+  }
+
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') detailListing ? setDetailListing(null) : onClose()
@@ -425,6 +551,7 @@ export default function MapExperience({ lang, onClose }: Props) {
     ? detailListing.media.filter((item) => item.media_type === 'video').sort((a, b) => a.sort_order - b.sort_order)
     : []
   const activePhoto = detailPhotos[galleryIndex] || detailPhotos[0]
+  const isUnavailable = Boolean(detailListing?.available_from && detailListing.available_from > localDateKey())
   const featureItems = detailListing ? [
     [t.furnished, detailListing.furnished],
     [t.elevator, detailListing.has_elevator],
@@ -434,6 +561,10 @@ export default function MapExperience({ lang, onClose }: Props) {
     [t.heating, detailListing.has_heating],
     [t.utilities, detailListing.utilities_included],
   ] as const : []
+  const activeDiscount = detailListing
+    ? [...detailListing.discount_tiers].sort((a, b) => b.min_months - a.min_months).find((tier) => leaseMonths >= tier.min_months)
+    : undefined
+  const detailDisplayPrice = detailListing ? priceFor(detailListing) : null
 
   return <motion.section
     className={`search-experience view-${layout}`}
@@ -442,13 +573,13 @@ export default function MapExperience({ lang, onClose }: Props) {
   >
     <header className="search-header">
       <button type="button" className="search-brand" onClick={onClose} aria-label={t.back}>
-        <span>ev<i>.</i></span><b>BAKU</b>
+        <HouseLogo /><b>EV BAKU</b>
       </button>
-      <label className="search-box">
+      <form className="search-box" onSubmit={(event) => { event.preventDefault(); void runAiSearch(query) }}>
         <Icon name="search" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} />
-        {query && <button type="button" onClick={() => setQuery('')} aria-label={t.clear}><Icon name="close" /></button>}
-      </label>
+        {query && <button type="submit" className="ai-search-submit" aria-label="AI search">✦</button>}
+      </form>
       <div className="layout-switcher" aria-label="Layout">
         <button type="button" className={layout === 'split' ? 'active' : ''} onClick={() => changeLayout('split')}><Icon name="split" /><span>{t.split}</span></button>
         <button type="button" className={layout === 'map' ? 'active' : ''} onClick={() => changeLayout('map')}><Icon name="map" /><span>{t.map}</span></button>
@@ -460,10 +591,17 @@ export default function MapExperience({ lang, onClose }: Props) {
 
     <div className="filter-bar">
       <span className="filter-bar__label">{t.filters}</span>
-      <label><span>{t.district}</span><select value={district} onChange={(event) => selectDistrict(event.target.value)}>
-        <option value="all">{t.allDistricts}</option>
-        {districts.map((item) => <option key={item.id} value={item.id}>{localizedDistrict(item)}</option>)}
-      </select></label>
+      <div className="district-filter" aria-label={t.district}>
+        <button type="button" className={district === 'all' ? 'active' : ''} onClick={() => selectDistrict('all')}>
+          {t.allDistricts}<small>{listings.length}</small>
+        </button>
+        {districts.map((item) => {
+          const count = listings.filter((listing) => listing.district === item.id).length
+          return <button type="button" key={item.id} className={district === item.id ? 'active' : ''} onClick={() => selectDistrict(item.id)}>
+            {localizedDistrict(item)}<small>{count}</small>
+          </button>
+        })}
+      </div>
       <label><span>{t.type}</span><select value={propertyType} onChange={(event) => setPropertyType(event.target.value as PropertyFilter)}>
         <option value="all">{t.allTypes}</option><option value="studio">{t.studio}</option><option value="apartment">{t.apartment}</option><option value="house">{t.house}</option><option value="villa">{t.villa}</option>
       </select></label>
@@ -474,6 +612,7 @@ export default function MapExperience({ lang, onClose }: Props) {
       <label><span>{t.furnished}</span><select value={furnished} onChange={(event) => setFurnished(event.target.value)}>
         <option value="all">{t.anyFurniture}</option><option value="yes">{t.yes}</option><option value="no">{t.no}</option>
       </select></label>
+      <label><span>{x.currency}</span><select value={displayCurrency} onChange={(event) => setDisplayCurrency(event.target.value as Currency)}>{(['AZN', 'USD', 'EUR', 'RUB'] as Currency[]).map((currency) => <option key={currency}>{currency}</option>)}</select></label>
       <button type="button" className="clear-filters" onClick={clearFilters}>{t.clear}</button>
     </div>
 
@@ -483,7 +622,7 @@ export default function MapExperience({ lang, onClose }: Props) {
           ref={mapRef}
           mapLib={maplibregl}
           workerUrl={workerUrl}
-          mapStyle="/map-style.json"
+          mapStyle={MAP_STYLE_URL}
           initialViewState={{ longitude: 49.867, latitude: 40.389, zoom: 11.15, pitch: 38, bearing: -12 }}
           maxBounds={BAKU_MAX_BOUNDS}
           minZoom={10.3}
@@ -492,23 +631,32 @@ export default function MapExperience({ lang, onClose }: Props) {
           attributionControl={{ compact: true }}
           reuseMaps
           onLoad={() => { setLoaded(true); showOverview(false) }}
+          onStyleData={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
           onMoveEnd={updateBounds}
+          interactiveLayerIds={['district-tint']}
+          onClick={(event) => {
+            const id = event.features?.[0]?.properties?.id
+            if (typeof id === 'string') selectDistrict(id)
+          }}
         >
           <Source id="district-data" type="geojson" data={districtGeo as GeoJSON.FeatureCollection}>
             <Layer {...(fillLayer as any)} />
             <Layer {...(outlineLayer as any)} />
+            <Layer {...(selectedDistrictFillLayer as any)} filter={['==', ['get', 'id'], district]} />
+            <Layer {...(selectedDistrictOutlineLayer as any)} filter={['==', ['get', 'id'], district]} />
           </Source>
           <Layer {...(buildingsLayer as any)} />
           <ScaleControl position="bottom-left" unit="metric" />
 
-          {visibleResults.map((listing) => {
+          {baseResults.map((listing) => {
             const active = selectedListing === listing.id
             return <Marker key={listing.id} longitude={Number(listing.longitude)} latitude={Number(listing.latitude)} anchor="bottom">
               <button type="button" className={`price-marker${active ? ' active' : ''}`} onClick={(event) => {
                 event.stopPropagation()
                 focusListing(listing)
-              }}>
-                {money(Number(listing.monthly_rent))} {currencySymbol[listing.rent_currency]}
+              }} aria-label={`${listing.title}: ${Number(listing.latitude).toFixed(5)}, ${Number(listing.longitude).toFixed(5)}`}>
+                <Icon name="home" /><span>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]}</span>
               </button>
             </Marker>
           })}
@@ -538,7 +686,7 @@ export default function MapExperience({ lang, onClose }: Props) {
             const cover = coverFor(listing)
             return <motion.article className="map-selected-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
               {cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="listing-image-placeholder"><Icon name="home" /></div>}
-              <div><span>{t.selectedHome}</span><b>{money(Number(listing.monthly_rent))} {currencySymbol[listing.rent_currency]} <small>{t.month}</small></b><p>{listing.rooms} {t.rooms.toLowerCase()} · {listing.area_sqm} {t.area}</p></div>
+              <div><span>{t.selectedHome}</span><b>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]} <small>{t.month}</small></b><p>{listing.rooms} {t.rooms.toLowerCase()} · {listing.area_sqm} {t.area}</p><small className="listing-coordinates">⌖ {Number(listing.latitude).toFixed(5)}, {Number(listing.longitude).toFixed(5)}</small></div>
               <button type="button" onClick={() => focusListing(listing, true)}>{t.view}<Icon name="arrow" /></button>
             </motion.article>
           })()}
@@ -547,7 +695,7 @@ export default function MapExperience({ lang, onClose }: Props) {
 
       <section className="results-pane" aria-label={t.results}>
         <div className="results-heading">
-          <div><span>BAKU · RENTALS</span><h1>{t.rent}</h1><p><strong>{visibleResults.length}</strong> {resultLabel}</p></div>
+          <div><span>{aiBusy ? x.aiSearching : aiMode ? (aiMode === 'semantic' ? x.aiSemantic : x.aiText) : 'BAKU · RENTALS'}</span><h1>{t.rent}</h1><p><strong>{visibleResults.length}</strong> {resultLabel}</p></div>
           <label><span>{t.sort}</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
             <option value="recommended">{t.recommended}</option><option value="priceAsc">{t.cheapest}</option>
             <option value="priceDesc">{t.expensive}</option><option value="areaDesc">{t.largest}</option>
@@ -575,7 +723,7 @@ export default function MapExperience({ lang, onClose }: Props) {
                 <Icon name="heart" />
               </button>
               <div className="listing-card__body">
-                <div className="listing-price"><b>{money(Number(listing.monthly_rent))} {currencySymbol[listing.rent_currency]}</b><span>{t.month}</span></div>
+                <div className="listing-price"><b>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]}</b><span>{t.month}</span>{listing.discount_tiers.length > 0 && <em>−{Math.max(...listing.discount_tiers.map((tier) => tier.discount_percent))}%</em>}</div>
                 <h2>{listing.title}</h2>
                 <p>{listing.address} · {localizedDistrict(listing.district)}</p>
                 <div className="listing-facts"><b>{listing.rooms}<small>{t.rooms}</small></b><b>{listing.area_sqm}<small>{t.area}</small></b><b>{listing.furnished ? t.yes : t.no}<small>{t.furnished}</small></b></div>
@@ -611,8 +759,9 @@ export default function MapExperience({ lang, onClose }: Props) {
             </div>
             <div className="listing-modal__info">
               <div className="listing-modal__title"><div><span>{t.details}</span><h2 id="listing-modal-title">{detailListing.title}</h2><p>{detailListing.address}</p></div><button type="button" className={saved.includes(detailListing.id) ? 'active' : ''} onClick={() => toggleSaved(detailListing.id)} aria-label={saved.includes(detailListing.id) ? t.unsave : t.save}><Icon name="heart" /></button></div>
-              <div className="modal-price"><b>{money(Number(detailListing.monthly_rent))} {currencySymbol[detailListing.rent_currency]}</b><span>{t.month}</span>{detailListing.rent_currency !== 'AZN' && <small>≈ {money(Number(detailListing.monthly_rent_azn))} ₼ {x.converted}</small>}</div>
+              <div className="modal-price"><b>{detailDisplayPrice && money(detailDisplayPrice.value)} {detailDisplayPrice && currencySymbol[detailDisplayPrice.currency]}</b><span>{t.month}</span>{detailListing.rent_currency !== displayCurrency && <small>{money(Number(detailListing.monthly_rent))} {currencySymbol[detailListing.rent_currency]} · original</small>}</div>
               <div className="modal-facts"><div><b>{detailListing.rooms}</b><span>{t.rooms}</span></div><div><b>{detailListing.area_sqm} {t.area}</b><span>{['house', 'villa'].includes(detailListing.property_type) ? t.house : t.apartment}</span></div><div><b>{detailListing.furnished ? t.yes : t.no}</b><span>{t.furnished}</span></div></div>
+              {isUnavailable && detailListing.available_from && <div className="availability-alert"><div><i>◷</i><span><b>{availabilityText.title}</b><small>{availabilityText.text.replace('{date}', localizedDate(detailListing.available_from, lang, detailListing.available_from))}</small></span></div><button type="button" className={availabilitySubscribed ? 'active' : ''} onClick={() => void toggleAvailabilityNotification()}>{availabilitySubscribed ? availabilityText.active : availabilityText.notify}</button>{availabilityStatus && <p>{availabilityStatus}</p>}</div>}
               <p className="modal-description">{detailListing.description}</p>
 
               <section className="modal-detail-section"><h3>{t.propertyFacts}</h3><div className="modal-property-grid">
@@ -625,13 +774,22 @@ export default function MapExperience({ lang, onClose }: Props) {
                 <div className="wide"><span>{t.availableFrom}</span><b>{localizedDate(detailListing.available_from, lang, t.notSpecified)}</b></div>
               </div></section>
 
-              <section className="modal-detail-section"><h3>{t.features}</h3><div className="modal-feature-grid">{featureItems.map(([label, enabled]) => <div key={label} className={enabled ? 'enabled' : 'disabled'}><i>{enabled ? '✓' : '—'}</i><span>{label}</span><b>{enabled ? t.included : t.notIncluded}</b></div>)}</div></section>
+              {detailListing.discount_tiers.length > 0 && <section className="modal-detail-section lease-discount"><h3>{x.discountPolicy}</h3>
+                <div className="lease-discount__controls"><label><span>{x.leaseTerm}</span><select value={leaseMonths} onChange={(event) => setLeaseMonths(Number(event.target.value))}>{Array.from({ length: Math.max(36, ...detailListing.discount_tiers.map((tier) => tier.min_months)) }, (_, index) => index + 1).filter((months) => months >= detailListing.minimum_lease_months).map((months) => <option key={months} value={months}>{months} {t.months}</option>)}</select></label>
+                  <div><span>{x.monthlyWithDiscount}</span><b>{detailDisplayPrice && money(detailDisplayPrice.value * (1 - Number(activeDiscount?.discount_percent || 0) / 100))} {detailDisplayPrice && currencySymbol[detailDisplayPrice.currency]}</b>{activeDiscount && <em>−{activeDiscount.discount_percent}%</em>}</div>
+                </div>
+                <div className="lease-discount__tiers">{detailListing.discount_tiers.map((tier) => <span key={tier.min_months}>{tier.min_months}+ {t.months}<b>−{tier.discount_percent}%</b></span>)}</div>
+              </section>}
+
+              <section className="modal-detail-section"><h3>{t.features}</h3><div className="modal-feature-grid">{featureItems.map(([label, enabled]) => <div key={label} className={enabled ? 'enabled' : 'disabled'}><i>{enabled ? '✓' : '—'}</i><span>{label}</span><b>{enabled ? t.included : t.notIncluded}</b></div>)}</div>
+                {detailListing.nearby_updated_at && <><h4 className="nearby-amenities-title">{nearbyText.infrastructure}</h4><div className="nearby-amenity-grid">{nearbyAmenities.map((item) => <div key={item.key} className={item.place ? 'available' : 'missing'}><i>{item.place ? '✓' : '−'}</i><span>{nearbyText.amenities[item.key]}</span><b>{item.place ? `${item.place.distance_meters} ${x.distance}` : nearbyText.notNearby}</b></div>)}</div></>}
+              </section>
               <section className="modal-detail-section"><h3>{t.rules}</h3><div className="modal-rules">
                 <div className={detailListing.pets_allowed ? 'allowed' : 'denied'}><i>{detailListing.pets_allowed ? '✓' : '×'}</i><span>{detailListing.pets_allowed ? t.petsAllowed : t.petsNotAllowed}</span></div>
                 <div className={detailListing.smoking_allowed ? 'allowed' : 'denied'}><i>{detailListing.smoking_allowed ? '✓' : '×'}</i><span>{detailListing.smoking_allowed ? t.smokingAllowed : t.smokingNotAllowed}</span></div>
               </div></section>
 
-              {nearbyGroups.length > 0 && <section className="modal-detail-section nearby-section"><h3>{x.nearby}</h3><div className="nearby-groups">{nearbyGroups.map((group) => <section key={group.key} className="nearby-group"><h4><i>{nearbyGroupIcon[group.key]}</i>{x.groups[group.key]}<span>{group.places.length}</span></h4><div>{group.places.map((place) => <article key={place.place_id}><span><b>{place.name}</b><small>{place.address || place.category.replaceAll('.', ' · ')}</small></span><strong>{place.distance_meters} {x.distance}</strong></article>)}</div></section>)}</div></section>}
+              {nearbyGroups.length > 0 && <section className="modal-detail-section nearby-section"><details><summary><span>{x.nearby}</span><small>{nearby.length}</small><b>{nearbyText.places}</b></summary><div className="nearby-groups">{nearbyGroups.map((group) => <section key={group.key} className="nearby-group"><h4><i>{nearbyGroupIcon[group.key]}</i>{x.groups[group.key]}<span>{group.places.length}</span></h4><div>{group.places.map((place) => <article key={place.place_id}><span><b>{place.name}</b><small>{place.address || place.category.replaceAll('.', ' · ')}</small></span><strong>{place.distance_meters} {x.distance}</strong></article>)}</div></section>)}</div></details></section>}
 
               <div className="modal-source"><p>{t.sourceNote}<br /><b>{detailListing.show_contact_name ? detailListing.contact_name : x.owner}</b></p><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a>{detailListing.contact_telegram && <a href={telegramUrl(detailListing.contact_telegram)} target="_blank" rel="noreferrer"><span>{x.telegram}</span><b>{detailListing.contact_telegram}</b><Icon name="arrow" /></a>}{detailListing.contact_whatsapp && <a href={whatsappUrl(detailListing.contact_whatsapp)} target="_blank" rel="noreferrer"><span>{x.whatsapp}</span><b>{detailListing.contact_whatsapp}</b><Icon name="arrow" /></a>}</div>
               {user?.id !== detailListing.owner_id && <form className="owner-chat" onSubmit={sendOwnerMessage}><h3>{x.chat}</h3><div><input name="message" maxLength={2000} required placeholder={x.message} /><button type="submit">{x.send}</button></div>{chatStatus && <p>{chatStatus}</p>}</form>}

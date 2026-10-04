@@ -4,6 +4,8 @@ import '@fontsource-variable/manrope'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import ConstructionHero from './components/ConstructionHero'
 import AccountAccess from './components/AccountAccess'
+import HouseLogo from './components/HouseLogo'
+import { startAvailabilityNotificationScheduler } from './lib/availabilityNotifications'
 import type { Lang } from './types/api'
 import './App.css'
 
@@ -18,6 +20,8 @@ function initialLanguage(): Lang {
 export default function App() {
   const [lang, setLang] = useState<Lang>(initialLanguage)
   const [mapOpen, setMapOpen] = useState(false)
+  const [aiQuery, setAiQuery] = useState('')
+  const [accountOpen, setAccountOpen] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('ev-lang', lang)
@@ -29,11 +33,13 @@ export default function App() {
     return () => { document.body.style.overflow = '' }
   }, [mapOpen])
 
+  useEffect(() => startAvailabilityNotificationScheduler(), [])
+
   return <>
     <header className="site-header">
       <a className="site-brand" href="#top" aria-label="ev. Baku">
-        <span className="site-logo">ev<i>.</i></span>
-        <b>Baku rental discovery</b>
+        <HouseLogo className="site-logo" />
+        <span className="site-brand__wordmark"><b>EV BAKU</b><small>Rental discovery</small></span>
       </a>
       <div className="site-header__actions">
         <div className="site-languages" aria-label="Language">
@@ -45,17 +51,22 @@ export default function App() {
             onClick={() => setLang(item)}
           >{item.toUpperCase()}</button>)}
         </div>
-        <AccountAccess lang={lang} />
+        <AccountAccess lang={lang} onOverlayChange={setAccountOpen} />
       </div>
     </header>
 
     <main id="top">
-      <ConstructionHero lang={lang} active={!mapOpen} onContinue={() => setMapOpen(true)} />
+      <ConstructionHero
+        lang={lang}
+        active={!mapOpen && !accountOpen}
+        onContinue={() => { setAiQuery(''); setMapOpen(true) }}
+        onAiSearch={(query) => { setAiQuery(query); setMapOpen(true) }}
+      />
     </main>
 
     <AnimatePresence mode="wait">
       {mapOpen && <Suspense key="rental-map" fallback={<div className="map-chunk-loader" role="status"><span /></div>}>
-        <MapExperience lang={lang} onClose={() => setMapOpen(false)} />
+        <MapExperience lang={lang} initialAiQuery={aiQuery} onClose={() => setMapOpen(false)} />
       </Suspense>}
     </AnimatePresence>
   </>

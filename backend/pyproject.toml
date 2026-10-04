@@ -34,3 +34,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 ignore = ["B008"] # FastAPI intentionally uses Depends/File/Form calls in signatures.
+
+[tool.setuptools.package-data]
+app = ["data/*.json", "data/*.png"]

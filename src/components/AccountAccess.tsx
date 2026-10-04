@@ -1,7 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { api, mediaUrl } from '../lib/api'
+import { districtCenter } from '../data/mapConfig'
 import { useAuth } from '../context/AuthContext'
+import HouseLogo from './HouseLogo'
+import LocationPicker from './LocationPicker'
+import UiErrorBoundary from './UiErrorBoundary'
 import type {
   DistrictId,
   AddressSuggestion,
@@ -17,14 +21,13 @@ import type {
 } from '../types/api'
 import './AccountAccess.css'
 
-type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void }
+type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void; onOverlayChange?: (open: boolean) => void }
 type DashboardTab = 'list' | 'new' | 'edit' | 'favorites' | 'chat' | 'profile'
-const LocationPicker = lazy(() => import('./LocationPicker'))
 
 const extra = {
-  az: { favorites: 'Seçilmişlər', chat: 'Çat', profile: 'Əlaqələr', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Ad və soyadı göstər', currency: 'Valyuta', aznEquivalent: 'AZN ekvivalenti', saved: 'Yadda saxlanıldı', send: 'Göndər', noChats: 'Hələ mesaj yoxdur', chooseChat: 'Söhbəti seçin', profileSaved: 'Profil yadda saxlanıldı' },
-  en: { favorites: 'Favorites', chat: 'Chat', profile: 'Contacts', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Show full name publicly', currency: 'Currency', aznEquivalent: 'AZN equivalent', saved: 'Saved', send: 'Send', noChats: 'No conversations yet', chooseChat: 'Choose a conversation', profileSaved: 'Profile saved' },
-  ru: { favorites: 'Избранное', chat: 'Чат', profile: 'Контакты', telegram: 'Телеграм', whatsapp: 'WhatsApp / username', showName: 'Показывать имя и фамилию', currency: 'Валюта', aznEquivalent: 'Эквивалент в AZN', saved: 'Сохранено', send: 'Отправить', noChats: 'Диалогов пока нет', chooseChat: 'Выберите диалог', profileSaved: 'Профиль сохранён' },
+  az: { favorites: 'Seçilmişlər', chat: 'Çat', profile: 'Əlaqələr', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Ad və soyadı göstər', currency: 'Valyuta', aznEquivalent: 'AZN ekvivalenti', saved: 'Yadda saxlanıldı', send: 'Göndər', noChats: 'Hələ mesaj yoxdur', chooseChat: 'Söhbəti seçin', profileSaved: 'Profil yadda saxlanıldı', discounts: 'Müddətə görə endirim', discountHint: 'İstəyə bağlıdır. Uzunmüddətli kirayə üçün aylıq endirimi təyin edin.', addDiscount: 'Endirim əlavə et', fromMonths: 'Bu aydan', percent: 'Endirim, %', monthlyTotal: 'Aylıq qiymət', removeTier: 'Sil' },
+  en: { favorites: 'Favorites', chat: 'Chat', profile: 'Contacts', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Show full name publicly', currency: 'Currency', aznEquivalent: 'AZN equivalent', saved: 'Saved', send: 'Send', noChats: 'No conversations yet', chooseChat: 'Choose a conversation', profileSaved: 'Profile saved', discounts: 'Long-stay discounts', discountHint: 'Optional. Set a lower monthly price for longer leases.', addDiscount: 'Add discount', fromMonths: 'From month', percent: 'Discount, %', monthlyTotal: 'Monthly price', removeTier: 'Remove' },
+  ru: { favorites: 'Избранное', chat: 'Чат', profile: 'Контакты', telegram: 'Телеграм', whatsapp: 'WhatsApp / username', showName: 'Показывать имя и фамилию', currency: 'Валюта', aznEquivalent: 'Эквивалент в AZN', saved: 'Сохранено', send: 'Отправить', noChats: 'Диалогов пока нет', chooseChat: 'Выберите диалог', profileSaved: 'Профиль сохранён', discounts: 'Скидки за срок аренды', discountHint: 'Необязательно. Укажите скидку на ежемесячный платеж при долгой аренде.', addDiscount: 'Добавить скидку', fromMonths: 'От месяцев', percent: 'Скидка, %', monthlyTotal: 'Цена в месяц', removeTier: 'Удалить' },
 } as const
 
 const text = {
@@ -39,11 +42,6 @@ const text = {
   },
 } as const
 
-const districtCenters: Record<DistrictId, [number, number]> = {
-  sabail: [49.83, 40.35], yasamal: [49.803, 40.386], nasimi: [49.839, 40.388],
-  narimanov: [49.861, 40.407], khatai: [49.905, 40.379], nizami: [49.928, 40.415],
-}
-
 const districtLabels: Record<Lang, Record<DistrictId, string>> = {
   az: { sabail: 'Səbail', yasamal: 'Yasamal', nasimi: 'Nəsimi', narimanov: 'Nərimanov', khatai: 'Xətai', nizami: 'Nizami' },
   en: { sabail: 'Sabail', yasamal: 'Yasamal', nasimi: 'Nasimi', narimanov: 'Narimanov', khatai: 'Khatai', nizami: 'Nizami' },
@@ -57,39 +55,59 @@ const propertyLabels: Record<Lang, Record<PropertyType, string>> = {
 }
 
 function emptyListing(userName = '', phone = '', telegram = '', whatsapp = '', showName = true): ListingPayload {
+  const [longitude, latitude] = districtCenter('yasamal')
   return {
     title: '', description: '', property_type: 'apartment', district: 'yasamal', address: '',
-    latitude: districtCenters.yasamal[1], longitude: districtCenters.yasamal[0], monthly_rent: 0,
+    latitude, longitude, monthly_rent: 0,
     rent_currency: 'AZN',
     deposit: null, area_sqm: 0, rooms: 2, bedrooms: 1, bathrooms: 1, max_guests: 2,
     furnished: true, floor: null, total_floors: null, has_elevator: false, has_balcony: false,
     has_parking: false, has_air_conditioning: false, has_heating: false, pets_allowed: false,
     smoking_allowed: false, utilities_included: false, minimum_lease_months: 1,
+    discount_tiers: [],
     available_from: null, contact_name: userName, contact_phone: phone, show_contact_name: showName,
     contact_telegram: telegram || null, contact_whatsapp: whatsapp || null,
   }
 }
 
 function listingPayload(listing: Listing): ListingPayload {
-  const { id: _id, owner_id: _owner, status: _status, media: _media, monthly_rent_azn: _azn, created_at: _created, updated_at: _updated, published_at: _published, ...payload } = listing
+  const {
+    id: _id,
+    owner_id: _owner,
+    status: _status,
+    media: _media,
+    monthly_rent_azn: _azn,
+    nearby_places: _nearby,
+    nearby_updated_at: _nearbyUpdated,
+    created_at: _created,
+    updated_at: _updated,
+    published_at: _published,
+    ...payload
+  } = listing
   return payload
 }
 
-export default function AccountAccess({ lang, compact = false, onListingsChanged }: Props) {
+export default function AccountAccess({ lang, compact = false, onListingsChanged, onOverlayChange }: Props) {
   const { user, loading, login, register, logout } = useAuth()
   const [authOpen, setAuthOpen] = useState(false)
   const [dashboardOpen, setDashboardOpen] = useState(false)
   const t = text[lang]
 
+  useEffect(() => {
+    onOverlayChange?.(authOpen || dashboardOpen)
+  }, [authOpen, dashboardOpen, onOverlayChange])
+  useEffect(() => () => onOverlayChange?.(false), [onOverlayChange])
+
   if (loading) return <span className="account-loading" />
+  const overlay = <>
+    {authOpen && <AuthModal lang={lang} onClose={() => setAuthOpen(false)} login={login} register={register} onSuccess={() => { setAuthOpen(false); setDashboardOpen(true) }} />}
+    {dashboardOpen && user && <UiErrorBoundary lang={lang} onClose={() => setDashboardOpen(false)}><Dashboard lang={lang} onClose={() => setDashboardOpen(false)} onLogout={async () => { await logout(); setDashboardOpen(false) }} onListingsChanged={onListingsChanged} /></UiErrorBoundary>}
+  </>
   return <>
     <button type="button" className={`account-trigger${compact ? ' compact' : ''}`} onClick={() => user ? setDashboardOpen(true) : setAuthOpen(true)}>
       <span>{user ? user.full_name.slice(0, 1).toUpperCase() : '○'}</span>{compact ? '' : user ? t.account : t.login}
     </button>
-    <AnimatePresence>
-      {authOpen && <AuthModal lang={lang} onClose={() => setAuthOpen(false)} login={login} register={register} onSuccess={() => { setAuthOpen(false); setDashboardOpen(true) }} />}
-      {dashboardOpen && user && <Dashboard lang={lang} onClose={() => setDashboardOpen(false)} onLogout={async () => { await logout(); setDashboardOpen(false) }} onListingsChanged={onListingsChanged} />}
-    </AnimatePresence>
+    {createPortal(overlay, document.body)}
   </>
 }
 
@@ -110,10 +128,10 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
       onSuccess()
     } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
   }
-  return <motion.div className="account-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <motion.section className="auth-modal" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}>
+  return <div className="account-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="auth-modal">
       <button type="button" className="account-close" onClick={onClose} aria-label={t.close}>×</button>
-      <div className="auth-logo">ev<span>.</span></div><p>BAKU · RENTAL ACCOUNT</p><h2>{mode === 'login' ? t.signin : t.signup}</h2>
+      <HouseLogo className="auth-logo" /><p>BAKU · RENTAL ACCOUNT</p><h2>{mode === 'login' ? t.signin : t.signup}</h2>
       <form onSubmit={submit}>
         {mode === 'register' && <><label>{t.name}<input name="full_name" required minLength={2} autoComplete="name" /></label><label>{t.phone}<input name="phone" autoComplete="tel" /></label></>}
         <label>{t.email}<input name="email" type="email" required autoComplete="email" /></label>
@@ -122,8 +140,8 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
         <button type="submit" disabled={busy}>{busy ? t.saving : mode === 'login' ? t.login : t.signup}</button>
       </form>
       <button type="button" className="auth-mode" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>{mode === 'login' ? `${t.noAccount} ${t.signup}` : `${t.hasAccount} ${t.login}`}</button>
-    </motion.section>
-  </motion.div>
+    </section>
+  </div>
 }
 
 function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang; onClose: () => void; onLogout: () => Promise<void>; onListingsChanged?: () => void }) {
@@ -161,11 +179,27 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const statuses = useMemo(() => ({ draft: t.draft, published: t.published, archived: t.archived }), [t])
 
   const field = (name: keyof ListingPayload, value: unknown) => setForm((current) => ({ ...current, [name]: value }))
-  const toggle = (name: keyof ListingPayload) => field(name, !form[name])
+  const toggle = (name: keyof ListingPayload) => setForm((current) => ({ ...current, [name]: !Boolean(current[name]) }))
   const changeDistrict = (value: DistrictId) => {
-    const [longitude, latitude] = districtCenters[value]
+    const [longitude, latitude] = districtCenter(value)
     setForm((current) => ({ ...current, district: value, longitude, latitude }))
   }
+  const addDiscountTier = () => {
+    const lastMonths = Math.max(form.minimum_lease_months, ...form.discount_tiers.map((tier) => tier.min_months), 0)
+    field('discount_tiers', [...form.discount_tiers, { min_months: Math.min(120, lastMonths + (lastMonths < 6 ? 3 : 6)), discount_percent: 5 }])
+  }
+  const updateDiscountTier = (index: number, key: 'min_months' | 'discount_percent', value: number) => {
+    field('discount_tiers', form.discount_tiers.map((tier, tierIndex) => tierIndex === index ? { ...tier, [key]: value } : tier))
+  }
+  const removeDiscountTier = (index: number) => field('discount_tiers', form.discount_tiers.filter((_, tierIndex) => tierIndex !== index))
+  const changeLocation = useCallback((latitude: number, longitude: number) => {
+    setForm((current) => ({ ...current, latitude, longitude }))
+  }, [])
+  const mediaValidationError = lang === 'ru'
+    ? 'Файл не поддерживается или превышает допустимый размер.'
+    : lang === 'az'
+      ? 'Fayl dəstəklənmir və ya icazə verilən ölçüdən böyükdür.'
+      : 'The file type is not supported or the file is too large.'
   const clearUploads = () => { setPhotos([]); setPlans([]); setVideos([]) }
   const startCreate = () => {
     setEditing(null); setExistingMedia([]); clearUploads(); setPublishNow(true)
@@ -239,9 +273,9 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
     try { const item = await api.sendMessage(activeConversation, body); setChatMessages((current) => [...current, item]); event.currentTarget.reset() } catch (err) { setError(err instanceof Error ? err.message : t.error) }
   }
 
-  return <motion.div className="account-backdrop dashboard-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-    <motion.section className="dashboard" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ ease: [0.22, 1, 0.36, 1], duration: .45 }}>
-      <header><div><div className="auth-logo">ev<span>.</span></div><div><p>{user?.email}</p><h2>{t.account}</h2></div></div><button type="button" className="account-close" onClick={onClose}>×</button></header>
+  return <div className="account-backdrop dashboard-backdrop">
+    <section className="dashboard">
+      <header><div><HouseLogo className="auth-logo" /><div><p>{user?.email}</p><h2>{t.account}</h2></div></div><button type="button" className="account-close" onClick={onClose}>×</button></header>
       <nav><button type="button" className={tab === 'list' ? 'active' : ''} onClick={() => setTab('list')}>{t.my}<b>{listings.length}</b></button><button type="button" className={tab === 'new' ? 'active' : ''} onClick={startCreate}>{t.add}</button>{tab === 'edit' && <button type="button" className="active">{t.editing}</button>}<button type="button" className={tab === 'favorites' ? 'active' : ''} onClick={() => setTab('favorites')}>{x.favorites}</button><button type="button" className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>{x.chat}</button><button type="button" className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}>{x.profile}</button><button type="button" onClick={onLogout}>{t.logout}</button></nav>
       <main>
         {error && <div className="account-error">{error}</div>}{message && <div className="account-success">{message}</div>}
@@ -284,18 +318,26 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
             <NumberField label={t.lease} value={form.minimum_lease_months} onChange={(value) => field('minimum_lease_months', value)} />
             <label>{t.available}<input type="date" value={form.available_from || ''} onChange={(e) => field('available_from', e.target.value || null)} /></label>
           </div></section>
-          <section><h3>{t.coordinates}</h3><Suspense fallback={<div className="location-loading">{t.saving}</div>}><LocationPicker lang={lang} latitude={Number(form.latitude)} longitude={Number(form.longitude)} onChange={(latitude, longitude) => setForm((current) => ({ ...current, latitude, longitude }))} /></Suspense></section>
+          <section className="discount-builder"><div className="discount-builder__heading"><div><h3>{x.discounts}</h3><p>{x.discountHint}</p></div><button type="button" onClick={addDiscountTier}>＋ {x.addDiscount}</button></div>
+            {form.discount_tiers.length > 0 && <div className="discount-tier-list">{form.discount_tiers.map((tier, index) => <div className="discount-tier" key={`${index}-${tier.min_months}`}>
+              <NumberField label={x.fromMonths} value={tier.min_months} onChange={(value) => updateDiscountTier(index, 'min_months', value)} />
+              <NumberField label={x.percent} value={tier.discount_percent} onChange={(value) => updateDiscountTier(index, 'discount_percent', value)} step="0.5" />
+              <div className="discount-tier__preview"><span>{x.monthlyTotal}</span><b>{(form.monthly_rent * (1 - tier.discount_percent / 100)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {form.rent_currency}</b></div>
+              <button type="button" className="discount-tier__remove" onClick={() => removeDiscountTier(index)} aria-label={x.removeTier}>×</button>
+            </div>)}</div>}
+          </section>
+          <section><h3>{t.coordinates}</h3><LocationPicker lang={lang} latitude={Number(form.latitude)} longitude={Number(form.longitude)} onChange={changeLocation} /></section>
           <section><h3>{t.amenities}</h3><div className="check-grid">{([
             ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_parking', t.parking], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
           ] as [keyof ListingPayload, string][]).map(([name, label]) => <label key={name}><input type="checkbox" checked={Boolean(form[name])} onChange={() => toggle(name)} /><span />{label}</label>)}</div></section>
           {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}
-          <section><h3>{t.addMedia}</h3><div className="media-inputs"><FileField label={t.photos} accept="image/jpeg,image/png,image/webp,image/avif" files={photos} multiple onChange={setPhotos} hint="JPG, PNG, WebP · max 15 MB" fileWord={t.files} /><FileField label={t.plan} accept="image/jpeg,image/png,image/webp,image/avif" files={plans} multiple onChange={setPlans} hint="Image · max 15 MB" fileWord={t.files} /><FileField label={t.video} accept="video/mp4,video/webm,video/quicktime" files={videos} multiple onChange={setVideos} hint="MP4, WebM · max 100 MB" fileWord={t.files} /></div></section>
+          <section><h3>{t.addMedia}</h3><div className="media-inputs"><FileField label={t.photos} accept="image/jpeg,image/png,image/webp,image/avif" files={photos} multiple maxBytes={15 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setPhotos} hint="JPG, PNG, WebP · max 15 MB" fileWord={t.files} /><FileField label={t.plan} accept="image/jpeg,image/png,image/webp,image/avif" files={plans} multiple maxBytes={15 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setPlans} hint="Image · max 15 MB" fileWord={t.files} /><FileField label={t.video} accept="video/mp4,video/webm,video/quicktime" files={videos} multiple maxBytes={100 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setVideos} hint="MP4, WebM · max 100 MB" fileWord={t.files} /></div></section>
           <section><h3>{t.contact}</h3><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={() => toggle('show_contact_name')} />{x.showName}</label></div></section>
           <div className="form-submit">{(!editing || editing.status !== 'published') && <label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label>}<button type="submit" disabled={busy}>{busy ? t.saving : editing ? t.saveChanges : publishNow ? t.createPublish : t.saveDraft}</button></div>
         </form>}
       </main>
-    </motion.section>
-  </motion.div>
+    </section>
+  </div>
 }
 
 function MediaManager({ media, t, onCover, onRemove }: {
@@ -316,10 +358,20 @@ function MediaManager({ media, t, onCover, onRemove }: {
   })}</section>
 }
 
-function FileField({ label, accept, files, multiple, onChange, hint, fileWord }: {
-  label: string; accept: string; files: File[]; multiple?: boolean; onChange: (files: File[]) => void; hint: string; fileWord: string
+function FileField({ label, accept, files, multiple, maxBytes, onChange, onError, errorMessage, hint, fileWord }: {
+  label: string; accept: string; files: File[]; multiple?: boolean; maxBytes: number; onChange: (files: File[]) => void; onError: (message: string) => void; errorMessage: string; hint: string; fileWord: string
 }) {
-  return <label>{label}<input type="file" accept={accept} multiple={multiple} onChange={(event) => onChange(Array.from(event.target.files || []))} /><span>{files.length ? `${files.length} ${fileWord}` : hint}</span></label>
+  return <label>{label}<input type="file" accept={accept} multiple={multiple} onChange={(event) => {
+    const selected = Array.from(event.currentTarget.files || [])
+    const accepted = new Set(accept.split(','))
+    if (selected.some((file) => file.size > maxBytes || !accepted.has(file.type))) {
+      event.currentTarget.value = ''
+      onError(errorMessage)
+      return
+    }
+    onError('')
+    onChange(selected)
+  }} /><span>{files.length ? `${files.length} ${fileWord}` : hint}</span></label>
 }
 
 function AddressAutocomplete({ lang, label, value, onChange, onSelect }: {

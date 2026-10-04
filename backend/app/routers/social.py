@@ -28,7 +28,7 @@ async def accessible_conversation(conversation_id: str, user_id: str, db: AsyncS
 async def favorites(auth: AuthContext = Depends(current_auth), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Listing).join(Favorite, Favorite.listing_id == Listing.id)
-        .options(selectinload(Listing.media))
+        .options(selectinload(Listing.media), selectinload(Listing.discount_tiers))
         .where(Favorite.user_id == auth.user.id, Listing.status == ListingStatus.published)
         .order_by(Favorite.created_at.desc())
     )

@@ -1,11 +1,12 @@
-export type Lang = 'az' | 'en' | 'ru'
+import type { DistrictId } from '../types/api'
 
 export type District = {
-    id: string
+    id: DistrictId
     name: string
     az: string
     mood: string
     center: [number, number]
+    bounds: [[number, number], [number, number]]
 }
 export const districts: District[] = [
     {
@@ -16,6 +17,10 @@ export const districts: District[] = [
         "center": [
             49.83,
             40.35
+        ],
+        "bounds": [
+            [49.76, 40.27],
+            [49.89, 40.38]
         ]
     },
     {
@@ -26,18 +31,24 @@ export const districts: District[] = [
         "center": [
             49.803,
             40.386
+        ],
+        "bounds": [
+            [49.78, 40.35],
+            [49.84, 40.42]
         ]
     },
     {
-        "id": "nasimi",
-        "name": "Насими",
-        "az": "Nəsimi",
-        "mood": "В центре городской жизни",
-        "center": [
-            49.839,
-            40.388
+        id: "nizami",
+        name: "Низами",
+        az: "Nizami",
+        mood: "Пространство для семьи",
+        center: [49.9280441, 40.4076802],
+        bounds: [
+            [49.881893, 40.3894415],
+            [49.9693331, 40.4264143]
         ]
     },
+
     {
         "id": "narimanov",
         "name": "Нариманов",
@@ -46,6 +57,10 @@ export const districts: District[] = [
         "center": [
             49.861,
             40.407
+        ],
+        "bounds": [
+            [49.825, 40.388],
+            [49.918, 40.439]
         ]
     },
     {
@@ -56,20 +71,34 @@ export const districts: District[] = [
         "center": [
             49.905,
             40.379
+        ],
+        "bounds": [
+            [49.856, 40.32],
+            [49.995, 40.409]
         ]
     },
     {
-        "id": "nizami",
-        "name": "Низами",
-        "az": "Nizami",
-        "mood": "Пространство для семьи",
-        "center": [
-            49.928,
-            40.415
+        id: "nasimi",
+        name: "Насими",
+        az: "Nəsimi",
+        mood: "В центре городской жизни",
+        center: [49.8483327, 40.3776031],
+        bounds: [
+            [49.8023681, 40.365],
+            [49.8763747, 40.4209156]
         ]
-    }
+    },
 ]
-export const districtGeo = {
+
+export const districtById = Object.fromEntries(
+    districts.map((district) => [district.id, district]),
+) as Record<DistrictId, District>
+
+export function districtCenter(id: DistrictId): [number, number] {
+    return districtById[id].center
+}
+
+const rawDistrictGeo = {
     "type": "FeatureCollection",
     "features": [
         {
@@ -1685,4 +1714,34 @@ export const districtGeo = {
             }
         }
     ]
+}
+
+const urbanSouthBoundary: Record<string, number> = {
+    // OSM administrative relations include offshore territory for these districts.
+    sabail: 40.27,
+    khatai: 40.32,
+    // Nəsimi has a narrow southern administrative spur that distorts the map viewport.
+    nasimi: 40.365,
+}
+
+export const districtGeo = {
+    ...rawDistrictGeo,
+    features: rawDistrictGeo.features.map((feature) => {
+        const cutoff = urbanSouthBoundary[feature.properties.id]
+        if (!cutoff) return feature
+
+        const coordinates = feature.geometry.coordinates.map((ring) => {
+            const urbanRing = ring.filter(([, latitude]) => latitude >= cutoff)
+            if (urbanRing.length < 3) return ring
+
+            const [firstLongitude, firstLatitude] = urbanRing[0]
+            const [lastLongitude, lastLatitude] = urbanRing[urbanRing.length - 1]
+            if (firstLongitude !== lastLongitude || firstLatitude !== lastLatitude) {
+                urbanRing.push([firstLongitude, firstLatitude])
+            }
+            return urbanRing
+        })
+
+        return { ...feature, geometry: { ...feature.geometry, coordinates } }
+    }),
 }

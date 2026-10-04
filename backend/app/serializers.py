@@ -34,7 +34,16 @@ def listing_to_dict(listing: Listing) -> dict:
         "smoking_allowed": listing.smoking_allowed,
         "utilities_included": listing.utilities_included,
         "minimum_lease_months": listing.minimum_lease_months,
+        "discount_tiers": [
+            {
+                "min_months": tier.min_months,
+                "discount_percent": tier.discount_percent,
+            }
+            for tier in listing.discount_tiers
+        ],
         "available_from": listing.available_from,
+        "nearby_places": listing.nearby_places,
+        "nearby_updated_at": listing.nearby_updated_at,
         "contact_name": listing.contact_name,
         "contact_phone": listing.contact_phone,
         "show_contact_name": listing.show_contact_name,

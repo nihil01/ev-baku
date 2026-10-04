@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .ai_search import EmbeddingService
 from .config import get_settings
 from .database import create_schema
 from .external import ExchangeRateService, GeoapifyService
@@ -21,6 +23,7 @@ async def lifespan(app: FastAPI):
     app.state.storage = storage
     app.state.geoapify = GeoapifyService(settings)
     app.state.exchange_rates = ExchangeRateService(settings)
+    app.state.embeddings = EmbeddingService(settings)
     yield
 
 
@@ -95,3 +98,8 @@ app.include_router(listings.router, prefix=settings.api_prefix)
 app.include_router(media.router, prefix=settings.api_prefix)
 app.include_router(social.router, prefix=settings.api_prefix)
 app.include_router(external.router, prefix=settings.api_prefix)
+
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -125,6 +125,8 @@ class Listing(Base):
     utilities_included: Mapped[bool] = mapped_column(Boolean, default=False)
     minimum_lease_months: Mapped[int] = mapped_column(Integer, default=1)
     available_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    nearby_places: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    nearby_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     contact_name: Mapped[str] = mapped_column(String(120))
     contact_phone: Mapped[str] = mapped_column(String(32))
@@ -137,6 +139,40 @@ class Listing(Base):
 
     owner: Mapped[User] = relationship(back_populates="listings")
     media: Mapped[list["ListingMedia"]] = relationship(back_populates="listing", cascade="all, delete-orphan", order_by="ListingMedia.sort_order")
+    discount_tiers: Mapped[list["ListingDiscountTier"]] = relationship(
+        back_populates="listing",
+        cascade="all, delete-orphan",
+        order_by="ListingDiscountTier.min_months",
+    )
+    embedding: Mapped["ListingEmbedding | None"] = relationship(
+        back_populates="listing",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class ListingDiscountTier(Base):
+    __tablename__ = "listing_discount_tiers"
+    __table_args__ = (UniqueConstraint("listing_id", "min_months", name="uq_listing_discount_months"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id", ondelete="CASCADE"), index=True)
+    min_months: Mapped[int] = mapped_column(Integer)
+    discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+
+    listing: Mapped[Listing] = relationship(back_populates="discount_tiers")
+
+
+class ListingEmbedding(Base):
+    __tablename__ = "listing_embeddings"
+
+    listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id", ondelete="CASCADE"), primary_key=True)
+    vector: Mapped[list[float]] = mapped_column(JSON)
+    model: Mapped[str] = mapped_column(String(120))
+    source_hash: Mapped[str] = mapped_column(String(64), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    listing: Mapped[Listing] = relationship(back_populates="embedding")
 
 
 class ListingMedia(Base):

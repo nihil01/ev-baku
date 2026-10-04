@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import Map, { Marker, NavigationControl, type MapLayerMouseEvent, type MapRef, type MarkerDragEvent } from 'react-map-gl/maplibre'
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import { MAP_STYLE_URL } from '../lib/api'
 import type { Lang } from '../types/api'
 import './LocationPicker.css'
 
@@ -16,7 +17,7 @@ function inside(longitude: number, latitude: number) {
   return longitude >= 49.65 && longitude <= 50.15 && latitude >= 40.25 && latitude <= 40.65
 }
 
-export default function LocationPicker({ lang, latitude, longitude, onChange }: {
+function LocationPicker({ lang, latitude, longitude, onChange }: {
   lang: Lang
   latitude: number
   longitude: number
@@ -51,7 +52,7 @@ export default function LocationPicker({ lang, latitude, longitude, onChange }: 
         ref={mapRef}
         mapLib={maplibregl}
         workerUrl={workerUrl}
-        mapStyle="/map-style.json"
+        mapStyle={MAP_STYLE_URL}
         initialViewState={{ longitude, latitude, zoom: 13 }}
         maxBounds={BAKU_BOUNDS}
         minZoom={10}
@@ -68,3 +69,5 @@ export default function LocationPicker({ lang, latitude, longitude, onChange }: 
     <div className="location-picker__coords"><span>{latitude.toFixed(6)}</span><span>{longitude.toFixed(6)}</span></div>
   </div>
 }
+
+export default memo(LocationPicker)

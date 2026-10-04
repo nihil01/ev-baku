@@ -149,35 +149,47 @@ class GeoapifyService:
 
 class ExchangeRateService:
     def __init__(self, settings: Settings):
+        self.provider_name = settings.exchange_rate_provider
         self.api_key = settings.exchange_rate_api_key
+        self.base_url = settings.exchange_rate_base_url
         self.cache_seconds = settings.exchange_rate_cache_seconds
         self._rates: dict[str, Decimal] | None = None
         self._expires_at: datetime | None = None
+        self.updated_at: datetime | None = None
         self._lock = asyncio.Lock()
+
+    async def _fetch_rates(self) -> dict[str, Decimal]:
+        """Provider boundary: replace this adapter when the bank-rate provider is selected."""
+        if self.provider_name != "exchangerate-api":
+            raise HTTPException(status_code=503, detail=f"Exchange rate provider '{self.provider_name}' is not configured")
+        if not self.api_key:
+            raise HTTPException(status_code=503, detail="ExchangeRate API is not configured")
+        endpoint = self.base_url or f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest/AZN"
+        try:
+            async with httpx.AsyncClient(timeout=12) as client:
+                response = await client.get(endpoint)
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail="Exchange rate service is temporarily unavailable") from exc
+        if payload.get("result") != "success":
+            raise HTTPException(status_code=502, detail="Exchange rate provider rejected the request")
+        source = payload.get("conversion_rates", {})
+        rates = {code: Decimal(str(source[code])) for code in ("AZN", "USD", "EUR", "RUB") if code in source}
+        if set(rates) != {"AZN", "USD", "EUR", "RUB"}:
+            raise HTTPException(status_code=502, detail="Exchange rate response is incomplete")
+        return rates
 
     async def rates(self) -> dict[str, Decimal]:
         now = datetime.now(UTC)
         if self._rates and self._expires_at and self._expires_at > now:
             return self._rates
-        if not self.api_key:
-            raise HTTPException(status_code=503, detail="ExchangeRate API is not configured")
         async with self._lock:
             now = datetime.now(UTC)
             if self._rates and self._expires_at and self._expires_at > now:
                 return self._rates
-            try:
-                async with httpx.AsyncClient(timeout=12) as client:
-                    response = await client.get(f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest/AZN")
-                    response.raise_for_status()
-                    payload = response.json()
-            except httpx.HTTPError as exc:
-                raise HTTPException(status_code=502, detail="Exchange rate service is temporarily unavailable") from exc
-            if payload.get("result") != "success":
-                raise HTTPException(status_code=502, detail="Exchange rate provider rejected the request")
-            source = payload.get("conversion_rates", {})
-            self._rates = {code: Decimal(str(source[code])) for code in ("AZN", "USD", "EUR", "RUB") if code in source}
-            if set(self._rates) != {"AZN", "USD", "EUR", "RUB"}:
-                raise HTTPException(status_code=502, detail="Exchange rate response is incomplete")
+            self._rates = await self._fetch_rates()
+            self.updated_at = now
             self._expires_at = now + timedelta(seconds=self.cache_seconds)
             return self._rates
 

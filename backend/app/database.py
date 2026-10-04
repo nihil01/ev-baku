@@ -58,6 +58,8 @@ async def _migrate_sqlite(connection) -> None:
             "show_contact_name": "BOOLEAN NOT NULL DEFAULT 1",
             "contact_telegram": "VARCHAR(64)",
             "contact_whatsapp": "VARCHAR(64)",
+            "nearby_places": "JSON",
+            "nearby_updated_at": "DATETIME",
         },
     }
     for table, columns in additions.items():

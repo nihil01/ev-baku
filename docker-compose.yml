@@ -13,7 +13,12 @@ services:
       GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
       GEOAPIFY_RADIUS_METERS: ${GEOAPIFY_RADIUS_METERS:-1000}
       EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY:-}
+      EXCHANGE_RATE_PROVIDER: ${EXCHANGE_RATE_PROVIDER:-exchangerate-api}
+      EXCHANGE_RATE_BASE_URL: ${EXCHANGE_RATE_BASE_URL:-}
       EXCHANGE_RATE_CACHE_SECONDS: ${EXCHANGE_RATE_CACHE_SECONDS:-21600}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Название minio пока оставляем, потому что backend
       # использует Python Minio SDK как S3-клиент.

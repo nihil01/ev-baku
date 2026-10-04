@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator, model_validator
 
 from .models import Currency, District, ListingStatus, MediaType, PropertyType, UserRole
 
@@ -52,6 +53,15 @@ class UserUpdate(BaseModel):
     show_full_name: bool | None = None
 
 
+class DiscountTier(BaseModel):
+    min_months: int = Field(ge=1, le=120)
+    discount_percent: Decimal = Field(gt=0, le=50)
+
+    @field_serializer("discount_percent", when_used="json")
+    def serialize_percent(self, value: Decimal) -> float:
+        return float(value)
+
+
 class ListingBase(BaseModel):
     title: str = Field(min_length=5, max_length=160)
     description: str = Field(min_length=20, max_length=5000)
@@ -80,6 +90,7 @@ class ListingBase(BaseModel):
     smoking_allowed: bool = False
     utilities_included: bool = False
     minimum_lease_months: int = Field(default=1, ge=1, le=120)
+    discount_tiers: list[DiscountTier] = Field(default_factory=list, max_length=8)
     available_from: date | None = None
     contact_name: str = Field(min_length=2, max_length=120)
     contact_phone: str = Field(min_length=5, max_length=32)
@@ -98,6 +109,14 @@ class ListingBase(BaseModel):
         if floor is not None and total_floors is not None and floor > total_floors:
             raise ValueError("floor cannot be greater than total_floors")
         return total_floors
+
+    @model_validator(mode="after")
+    def validate_discount_tiers(self):
+        months = [tier.min_months for tier in self.discount_tiers]
+        if len(months) != len(set(months)):
+            raise ValueError("Discount periods must be unique")
+        self.discount_tiers.sort(key=lambda tier: tier.min_months)
+        return self
 
 
 class ListingCreate(ListingBase):
@@ -132,12 +151,23 @@ class ListingUpdate(BaseModel):
     smoking_allowed: bool | None = None
     utilities_included: bool | None = None
     minimum_lease_months: int | None = Field(default=None, ge=1, le=120)
+    discount_tiers: list[DiscountTier] | None = Field(default=None, max_length=8)
     available_from: date | None = None
     contact_name: str | None = Field(default=None, min_length=2, max_length=120)
     contact_phone: str | None = Field(default=None, min_length=5, max_length=32)
     show_contact_name: bool | None = None
     contact_telegram: str | None = Field(default=None, max_length=64)
     contact_whatsapp: str | None = Field(default=None, max_length=64)
+
+    @field_validator("discount_tiers")
+    @classmethod
+    def validate_discount_tiers(cls, tiers: list[DiscountTier] | None):
+        if tiers is None:
+            return tiers
+        months = [tier.min_months for tier in tiers]
+        if len(months) != len(set(months)):
+            raise ValueError("Discount periods must be unique")
+        return sorted(tiers, key=lambda tier: tier.min_months)
 
 
 class MediaRead(BaseModel):
@@ -152,6 +182,17 @@ class MediaRead(BaseModel):
     is_cover: bool
 
 
+class NearbyPlace(BaseModel):
+    place_id: str
+    name: str
+    address: str | None
+    latitude: float | None
+    longitude: float | None
+    distance_meters: int
+    categories: list[str]
+    category: str
+
+
 class ListingRead(ListingBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -160,6 +201,8 @@ class ListingRead(ListingBase):
     monthly_rent_azn: Decimal
     status: ListingStatus
     media: list[MediaRead]
+    nearby_places: list[NearbyPlace] | None
+    nearby_updated_at: datetime | None
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None
@@ -176,19 +219,15 @@ class ListingPage(BaseModel):
     page_size: int
 
 
+class AiSearchResponse(BaseModel):
+    items: list[ListingRead]
+    total: int
+    query: str
+    mode: Literal["semantic", "text"]
+
+
 class Message(BaseModel):
     message: str
-
-
-class NearbyPlace(BaseModel):
-    place_id: str
-    name: str
-    address: str | None
-    latitude: float | None
-    longitude: float | None
-    distance_meters: int
-    categories: list[str]
-    category: str
 
 
 class AddressSuggestion(BaseModel):
@@ -204,6 +243,8 @@ class AddressSuggestion(BaseModel):
 class ExchangeRatesRead(BaseModel):
     base: str = "AZN"
     rates: dict[str, float]
+    provider: str
+    updated_at: datetime | None = None
 
 
 class ChatMessageCreate(BaseModel):

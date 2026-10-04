@@ -40,6 +40,10 @@ LISTING = {
     "smoking_allowed": False,
     "utilities_included": False,
     "minimum_lease_months": 6,
+    "discount_tiers": [
+        {"min_months": 6, "discount_percent": 5},
+        {"min_months": 12, "discount_percent": 10},
+    ],
     "contact_name": "Test Owner",
     "contact_phone": "+994501112233",
 }
@@ -56,7 +60,11 @@ class FakeExchangeRates:
 
 
 class FakeGeoapify:
+    def __init__(self):
+        self.nearby_calls = 0
+
     async def nearby(self, latitude, longitude, radius=None, lang="ru"):
+        self.nearby_calls += 1
         return [{
             "place_id": "market-1", "name": "Test Market", "address": "Baku",
             "latitude": latitude, "longitude": longitude, "distance_meters": 240,
@@ -73,6 +81,15 @@ class FakeGeoapify:
 
 def test_user_listing_media_publish_flow():
     with TestClient(app) as client:
+        map_style = client.get("/api/v1/map-style.json")
+        assert map_style.status_code == 200
+        assert map_style.headers["content-type"].startswith("application/json")
+        assert map_style.json()["version"] == 8
+        assert "openmaptiles" in map_style.json()["sources"]
+        logo = client.get("/api/v1/branding/logo.png")
+        assert logo.status_code == 200
+        assert logo.headers["content-type"].startswith("image/png")
+
         registration = client.post("/api/v1/auth/register", json={
             "email": "owner@example.com", "password": "securepass123", "full_name": "Test Owner", "phone": "+994501112233",
         })
@@ -86,10 +103,16 @@ def test_user_listing_media_publish_flow():
         assert profile.status_code == 200, profile.text
         assert profile.json()["telegram"] == "@testowner"
 
+        fake_geoapify = FakeGeoapify()
+        app.state.geoapify = fake_geoapify
         created = client.post("/api/v1/listings", json=LISTING, headers=headers)
         assert created.status_code == 201, created.text
         listing_id = created.json()["id"]
         assert created.json()["status"] == "draft"
+        assert created.json()["nearby_places"][0]["name"] == "Test Market"
+        assert created.json()["nearby_updated_at"] is not None
+        assert fake_geoapify.nearby_calls == 1
+        assert created.json()["discount_tiers"][1] == {"min_months": 12, "discount_percent": 10.0}
         assert client.post("/api/v1/listings", json=LISTING).status_code == 403
         assert client.post(f"/api/v1/listings/{listing_id}/publish", headers=headers).status_code == 422
 
@@ -159,11 +182,15 @@ def test_user_listing_media_publish_flow():
         assert public.json()["items"][0]["title"] == "Updated published apartment in Baku"
         assert public.json()["items"][0]["utilities_included"] is True
         assert public.json()["items"][0]["media"][0]["url"].startswith("/api/v1/media/")
+        ai_results = client.get("/api/v1/listings/ai-search?q=balcony%20yasamal")
+        assert ai_results.status_code == 200, ai_results.text
+        assert ai_results.json()["mode"] == "text"
+        assert ai_results.json()["items"][0]["id"] == listing_id
 
-        app.state.geoapify = FakeGeoapify()
         nearby = client.get(f"/api/v1/listings/{listing_id}/nearby?radius=1000&lang=en")
         assert nearby.status_code == 200
         assert nearby.json()[0]["distance_meters"] == 240
+        assert fake_geoapify.nearby_calls == 1
         addresses = client.get("/api/v1/addresses/autocomplete?q=nizami&lang=en")
         assert addresses.status_code == 200
         assert addresses.json()[0]["longitude"] == 49.8364

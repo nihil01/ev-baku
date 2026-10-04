@@ -4,6 +4,7 @@ export type PropertyType = 'studio' | 'apartment' | 'house' | 'villa'
 export type ListingStatus = 'draft' | 'published' | 'archived'
 export type MediaType = 'image' | 'floor_plan' | 'video'
 export type Currency = 'AZN' | 'USD' | 'EUR' | 'RUB'
+export type DiscountTier = { min_months: number; discount_percent: number }
 
 export type User = {
   id: string
@@ -61,7 +62,10 @@ export type Listing = {
   smoking_allowed: boolean
   utilities_included: boolean
   minimum_lease_months: number
+  discount_tiers: DiscountTier[]
   available_from: string | null
+  nearby_places: NearbyPlace[] | null
+  nearby_updated_at: string | null
   contact_name: string
   contact_phone: string
   show_contact_name: boolean
@@ -74,9 +78,16 @@ export type Listing = {
 }
 
 export type ListingPage = { items: Listing[]; total: number; page: number; page_size: number }
+export type AiSearchResponse = { items: Listing[]; total: number; query: string; mode: 'semantic' | 'text' }
+export type ExchangeRates = {
+  base: 'AZN'
+  rates: Record<Currency, number>
+  provider: string
+  updated_at: string | null
+}
 
 export type ListingPayload = Omit<Listing,
-  'id' | 'owner_id' | 'status' | 'media' | 'monthly_rent_azn' | 'created_at' | 'updated_at' | 'published_at'
+  'id' | 'owner_id' | 'status' | 'media' | 'monthly_rent_azn' | 'nearby_places' | 'nearby_updated_at' | 'created_at' | 'updated_at' | 'published_at'
 >
 
 export type NearbyPlace = {
