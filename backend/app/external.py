@@ -10,30 +10,44 @@ from .models import Currency
 
 PLACE_CATEGORIES = (
     "commercial.supermarket,commercial.convenience,"
+    "commercial.shopping_mall,"
     "healthcare.pharmacy,commercial.health_and_beauty.pharmacy,"
     "healthcare.hospital,healthcare.clinic_or_praxis,"
-    "education.school,childcare.kindergarten,"
+    "education.school,education.university,childcare.kindergarten,"
+    "catering.restaurant,catering.cafe,catering.fast_food,"
     "public_transport.subway,public_transport.bus,"
-    "leisure.park,leisure.playground"
+    "leisure.park,leisure.playground,"
+    "entertainment.cinema,service.financial.atm,tourism"
 )
 
 PLACE_CATEGORY_PREFIXES = (
     "commercial.supermarket",
     "commercial.convenience",
+    "commercial.shopping_mall",
     "healthcare.pharmacy",
     "commercial.health_and_beauty.pharmacy",
     "healthcare.hospital",
     "healthcare.clinic_or_praxis",
     "education.school",
+    "education.university",
     "childcare.kindergarten",
+    "catering.restaurant",
+    "catering.cafe",
+    "catering.fast_food",
     "public_transport.subway",
     "public_transport.bus",
     "leisure.park",
     "leisure.playground",
+    "entertainment.cinema",
+    "service.financial.atm",
+    "tourism",
 )
 
+NEARBY_CACHE_VERSION = 2
+NEARBY_DISPLAY_RADIUS_METERS = 1600
+
 # west, south, east, north — used by both address suggestions and the map.
-BAKU_RECT = "49.65,40.25,50.15,40.65"
+BAKU_RECT = "49.15,39.78,50.55,40.80"
 BAKU_CENTER = "49.867,40.409"
 
 
@@ -57,7 +71,7 @@ class GeoapifyService:
             "filter": f"circle:{longitude},{latitude},{distance}",
             "bias": f"proximity:{longitude},{latitude}",
             # Ask for a complete result set, then remove duplicate/unnamed OSM objects ourselves.
-            "limit": 100,
+            "limit": 150,
             "lang": lang,
             "apiKey": self.api_key,
         }

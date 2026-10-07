@@ -54,6 +54,31 @@ Requirements: Node.js 20+, Python 3.12+, Docker.
 
 The Vite development server proxies `/api` to FastAPI, so browser cookies stay same-origin during development.
 
+## Vercel preview deployment
+
+The root `vercel.json` deploys this repository as two Vercel Services: the Vite frontend at `/` and the FastAPI backend at `/api/*` (plus `/health`). Import the repository with its root directory unchanged, or run:
+
+```bash
+vercel link
+vercel deploy
+```
+
+Before deploying, copy every variable from `vercel.env.example` into Vercel Project Settings. In particular:
+
+- `DATABASE_URL` must point to managed PostgreSQL; SQLite inside a Function is not durable.
+- `MINIO_*` must point to an externally hosted S3-compatible service such as R2, B2, S3, or Garage/MinIO on another host.
+- `SECRET_KEY` must be a new random secret and `COOKIE_SECURE` must stay `true`.
+
+Vercel does not deploy `docker-compose.yml`, Garage/PostgreSQL containers, or their volumes. Docker Compose remains the complete local-development stack. Also keep test uploads below Vercel Functions' 4.5 MB request limit until media uploads are changed to browser-to-object-storage presigned uploads.
+
+After deployment, verify both services on the same preview domain:
+
+```text
+/
+/health
+/api/v1/map-style.json
+```
+
 ## Run the API outside Docker
 
 Start only Garage:

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -58,6 +59,15 @@ app.add_middleware(
 )
 
 
+def is_same_origin(request: Request, origin: str) -> bool:
+    parsed = urlsplit(origin)
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    host = forwarded_host or request.headers.get("host", "")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    scheme = forwarded_proto or request.url.scheme
+    return parsed.scheme == scheme and parsed.netloc == host
+
+
 @app.middleware("http")
 async def request_guards(request: Request, call_next):
     if (
@@ -66,7 +76,7 @@ async def request_guards(request: Request, call_next):
     ):
         origin = request.headers.get("origin")
 
-        if origin and origin.rstrip("/") not in settings.allowed_origins:
+        if origin and not is_same_origin(request, origin) and origin.rstrip("/") not in settings.allowed_origins:
             return JSONResponse(
                 status_code=403,
                 content={"detail": "Origin not allowed"},

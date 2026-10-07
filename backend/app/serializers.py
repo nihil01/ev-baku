@@ -1,7 +1,7 @@
 from .models import Listing
 
 
-def listing_to_dict(listing: Listing) -> dict:
+def listing_to_dict(listing: Listing, *, redact_private_contact: bool = True) -> dict:
     return {
         "id": listing.id,
         "owner_id": listing.owner_id,
@@ -45,10 +45,23 @@ def listing_to_dict(listing: Listing) -> dict:
         "nearby_places": listing.nearby_places,
         "nearby_updated_at": listing.nearby_updated_at,
         "contact_name": listing.contact_name,
-        "contact_phone": listing.contact_phone,
+        "contact_phone": (
+            None
+            if redact_private_contact and listing.contact_method.value == "messages"
+            else listing.contact_phone
+        ),
+        "contact_method": listing.contact_method,
         "show_contact_name": listing.show_contact_name,
-        "contact_telegram": listing.contact_telegram,
-        "contact_whatsapp": listing.contact_whatsapp,
+        "contact_telegram": (
+            None
+            if redact_private_contact and listing.contact_method.value == "messages"
+            else listing.contact_telegram
+        ),
+        "contact_whatsapp": (
+            None
+            if redact_private_contact and listing.contact_method.value == "messages"
+            else listing.contact_whatsapp
+        ),
         "created_at": listing.created_at,
         "updated_at": listing.updated_at,
         "published_at": listing.published_at,

@@ -85,7 +85,11 @@ def listing_embedding_text(listing: Listing) -> str:
             ("healthcare.hospital", "hospital clinic больница клиника рядом xəstəxana klinika"),
             ("healthcare.clinic_or_praxis", "clinic медицина рядом klinika yaxınlıqda"),
             ("education.school", "school школа рядом məktəb yaxınlıqda"),
+            ("education.university", "university university campus университет рядом universitet yaxınlıqda"),
             ("childcare.kindergarten", "kindergarten детский сад рядом uşaq bağçası"),
+            ("catering.restaurant", "restaurant ресторан рядом restoran yaxınlıqda"),
+            ("catering.cafe", "cafe coffee кофейня рядом kafe yaxınlıqda"),
+            ("commercial.shopping_mall", "shopping mall торговый центр рядом ticarət mərkəzi"),
             ("leisure.park", "park парк рядом park yaxınlıqda"),
         )
         if prefix in nearby_categories

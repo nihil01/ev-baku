@@ -1,9 +1,15 @@
 export type Lang = 'az' | 'en' | 'ru'
-export type DistrictId = 'sabail' | 'yasamal' | 'nasimi' | 'narimanov' | 'khatai' | 'nizami'
+export type DistrictId =
+    | 'sabail' | 'yasamal' | 'nizami'
+    | 'narimanov' | 'khatai' | 'nasimi'
+    | 'binagadi' | 'sabunchu' | 'surakhani'
+    | 'qaradag' | 'khazar' | 'pirallahi'
+    | 'khirdalan' | 'sumgait'
 export type PropertyType = 'studio' | 'apartment' | 'house' | 'villa'
 export type ListingStatus = 'draft' | 'published' | 'archived'
 export type MediaType = 'image' | 'floor_plan' | 'video'
 export type Currency = 'AZN' | 'USD' | 'EUR' | 'RUB'
+export type ContactMethod = 'phone' | 'messages' | 'both'
 export type DiscountTier = { min_months: number; discount_percent: number }
 
 export type User = {
@@ -67,7 +73,8 @@ export type Listing = {
   nearby_places: NearbyPlace[] | null
   nearby_updated_at: string | null
   contact_name: string
-  contact_phone: string
+  contact_phone: string | null
+  contact_method: ContactMethod
   show_contact_name: boolean
   contact_telegram: string | null
   contact_whatsapp: string | null
@@ -87,8 +94,8 @@ export type ExchangeRates = {
 }
 
 export type ListingPayload = Omit<Listing,
-  'id' | 'owner_id' | 'status' | 'media' | 'monthly_rent_azn' | 'nearby_places' | 'nearby_updated_at' | 'created_at' | 'updated_at' | 'published_at'
->
+  'id' | 'owner_id' | 'status' | 'media' | 'monthly_rent_azn' | 'nearby_places' | 'nearby_updated_at' | 'created_at' | 'updated_at' | 'published_at' | 'contact_phone'
+> & { contact_phone: string }
 
 export type NearbyPlace = {
   place_id: string

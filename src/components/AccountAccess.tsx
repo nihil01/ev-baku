@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'motion/react'
 import { api, mediaUrl } from '../lib/api'
-import { districtCenter } from '../data/mapConfig'
+import { districtCenter, districtLabel, districts } from '../data/mapConfig'
 import { useAuth } from '../context/AuthContext'
 import HouseLogo from './HouseLogo'
+import BrandedLoader from './BrandedLoader'
 import LocationPicker from './LocationPicker'
 import UiErrorBoundary from './UiErrorBoundary'
+import ErrorToast from './ErrorToast'
 import type {
   DistrictId,
   AddressSuggestion,
   ChatMessage,
   Conversation,
+  ContactMethod,
   Currency,
   Lang,
   Listing,
@@ -25,9 +29,9 @@ type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void; on
 type DashboardTab = 'list' | 'new' | 'edit' | 'favorites' | 'chat' | 'profile'
 
 const extra = {
-  az: { favorites: 'Seçilmişlər', chat: 'Çat', profile: 'Əlaqələr', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Ad və soyadı göstər', currency: 'Valyuta', aznEquivalent: 'AZN ekvivalenti', saved: 'Yadda saxlanıldı', send: 'Göndər', noChats: 'Hələ mesaj yoxdur', chooseChat: 'Söhbəti seçin', profileSaved: 'Profil yadda saxlanıldı', discounts: 'Müddətə görə endirim', discountHint: 'İstəyə bağlıdır. Uzunmüddətli kirayə üçün aylıq endirimi təyin edin.', addDiscount: 'Endirim əlavə et', fromMonths: 'Bu aydan', percent: 'Endirim, %', monthlyTotal: 'Aylıq qiymət', removeTier: 'Sil' },
-  en: { favorites: 'Favorites', chat: 'Chat', profile: 'Contacts', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Show full name publicly', currency: 'Currency', aznEquivalent: 'AZN equivalent', saved: 'Saved', send: 'Send', noChats: 'No conversations yet', chooseChat: 'Choose a conversation', profileSaved: 'Profile saved', discounts: 'Long-stay discounts', discountHint: 'Optional. Set a lower monthly price for longer leases.', addDiscount: 'Add discount', fromMonths: 'From month', percent: 'Discount, %', monthlyTotal: 'Monthly price', removeTier: 'Remove' },
-  ru: { favorites: 'Избранное', chat: 'Чат', profile: 'Контакты', telegram: 'Телеграм', whatsapp: 'WhatsApp / username', showName: 'Показывать имя и фамилию', currency: 'Валюта', aznEquivalent: 'Эквивалент в AZN', saved: 'Сохранено', send: 'Отправить', noChats: 'Диалогов пока нет', chooseChat: 'Выберите диалог', profileSaved: 'Профиль сохранён', discounts: 'Скидки за срок аренды', discountHint: 'Необязательно. Укажите скидку на ежемесячный платеж при долгой аренде.', addDiscount: 'Добавить скидку', fromMonths: 'От месяцев', percent: 'Скидка, %', monthlyTotal: 'Цена в месяц', removeTier: 'Удалить' },
+  az: { favorites: 'Seçilmişlər', chat: 'Çat', profile: 'Əlaqələr', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Ad və soyadı göstər', currency: 'Valyuta', aznEquivalent: 'AZN ekvivalenti', saved: 'Yadda saxlanıldı', send: 'Göndər', noChats: 'Hələ mesaj yoxdur', chooseChat: 'Söhbəti seçin', profileSaved: 'Profil yadda saxlanıldı', discounts: 'Müddətə görə endirim', discountHint: 'İstəyə bağlıdır. Uzunmüddətli kirayə üçün aylıq endirimi təyin edin.', addDiscount: 'Endirim əlavə et', fromMonths: 'Bu aydan', percent: 'Endirim, %', monthlyTotal: 'Aylıq qiymət', removeTier: 'Sil', contactMethod: 'Əlaqə üsulu', contactHint: 'Məxfilik üçün nömrənizi gizlədə və yalnız sayt mesajlarını seçə bilərsiniz.', phoneOnly: 'Yalnız nömrə', phoneOnlyHint: 'Telefon, Telegram və WhatsApp', messagesOnly: 'Yalnız şəxsi mesajlar', messagesOnlyHint: 'Nömrə saytda göstərilmir', both: 'Hər iki üsul', bothHint: 'Birbaşa əlaqə və sayt çatı', savingListing: 'Elan yadda saxlanılır…', watermarking: 'Fotolara zərif EV BAKU nişanı əlavə olunur', publishing: 'Dərc olunur…', archiving: 'Arxivlənir…' },
+  en: { favorites: 'Favorites', chat: 'Chat', profile: 'Contacts', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Show full name publicly', currency: 'Currency', aznEquivalent: 'AZN equivalent', saved: 'Saved', send: 'Send', noChats: 'No conversations yet', chooseChat: 'Choose a conversation', profileSaved: 'Profile saved', discounts: 'Long-stay discounts', discountHint: 'Optional. Set a lower monthly price for longer leases.', addDiscount: 'Add discount', fromMonths: 'From month', percent: 'Discount, %', monthlyTotal: 'Monthly price', removeTier: 'Remove', contactMethod: 'Contact method', contactHint: 'For privacy, you can hide your number and accept only private messages on the site.', phoneOnly: 'Phone only', phoneOnlyHint: 'Phone, Telegram and WhatsApp', messagesOnly: 'Private messages only', messagesOnlyHint: 'Your number stays hidden', both: 'Both options', bothHint: 'Direct contact and site chat', savingListing: 'Saving your listing…', watermarking: 'Adding a subtle EV BAKU mark to your photos', publishing: 'Publishing…', archiving: 'Archiving…' },
+  ru: { favorites: 'Избранное', chat: 'Чат', profile: 'Контакты', telegram: 'Телеграм', whatsapp: 'WhatsApp / username', showName: 'Показывать имя и фамилию', currency: 'Валюта', aznEquivalent: 'Эквивалент в AZN', saved: 'Сохранено', send: 'Отправить', noChats: 'Диалогов пока нет', chooseChat: 'Выберите диалог', profileSaved: 'Профиль сохранён', discounts: 'Скидки за срок аренды', discountHint: 'Необязательно. Укажите скидку на ежемесячный платеж при долгой аренде.', addDiscount: 'Добавить скидку', fromMonths: 'От месяцев', percent: 'Скидка, %', monthlyTotal: 'Цена в месяц', removeTier: 'Удалить', contactMethod: 'Способ связи', contactHint: 'Для конфиденциальности можно скрыть номер и принимать только личные сообщения на сайте.', phoneOnly: 'Только по номеру', phoneOnlyHint: 'Телефон, Telegram и WhatsApp', messagesOnly: 'Только личные сообщения', messagesOnlyHint: 'Номер не показывается на сайте', both: 'И то и другое', bothHint: 'Прямая связь и чат сайта', savingListing: 'Сохраняем объявление…', watermarking: 'Добавляем на фото аккуратный знак EV BAKU', publishing: 'Публикуем…', archiving: 'Архивируем…' },
 } as const
 
 const text = {
@@ -42,17 +46,17 @@ const text = {
   },
 } as const
 
-const districtLabels: Record<Lang, Record<DistrictId, string>> = {
-  az: { sabail: 'Səbail', yasamal: 'Yasamal', nasimi: 'Nəsimi', narimanov: 'Nərimanov', khatai: 'Xətai', nizami: 'Nizami' },
-  en: { sabail: 'Sabail', yasamal: 'Yasamal', nasimi: 'Nasimi', narimanov: 'Narimanov', khatai: 'Khatai', nizami: 'Nizami' },
-  ru: { sabail: 'Сабаиль', yasamal: 'Ясамал', nasimi: 'Насими', narimanov: 'Нариманов', khatai: 'Хатаи', nizami: 'Низами' },
-}
-
 const propertyLabels: Record<Lang, Record<PropertyType, string>> = {
   az: { studio: 'Studiya', apartment: 'Mənzil', house: 'Ev', villa: 'Villa' },
   en: { studio: 'Studio', apartment: 'Apartment', house: 'House', villa: 'Villa' },
   ru: { studio: 'Студия', apartment: 'Квартира', house: 'Дом', villa: 'Вилла' },
 }
+
+const mediaEditorCopy = {
+  az: { title: 'Foto və media', editHint: 'Mövcud faylları idarə edin və aşağıdan yenilərini əlavə edin. Yeni fayllar dəyişikliklər saxlanarkən yüklənəcək.', createHint: 'Elan üçün foto, plan və video seçin.', selected: 'Yeni fayllar seçilib', pending: 'Saxladıqdan sonra yüklənəcək', remove: 'Seçimdən sil' },
+  en: { title: 'Photos and media', editHint: 'Manage existing files and add new ones below. New files upload when you save changes.', createHint: 'Choose property photos, floor plans, and videos.', selected: 'New files selected', pending: 'Uploads after saving', remove: 'Remove from selection' },
+  ru: { title: 'Фотографии и медиа', editHint: 'Управляйте текущими файлами и добавляйте новые ниже. Новые файлы загрузятся при сохранении изменений.', createHint: 'Выберите фотографии квартиры, планировки и видео.', selected: 'Выбраны новые файлы', pending: 'Загрузятся после сохранения', remove: 'Убрать из выбранных' },
+} as const
 
 function emptyListing(userName = '', phone = '', telegram = '', whatsapp = '', showName = true): ListingPayload {
   const [longitude, latitude] = districtCenter('yasamal')
@@ -65,7 +69,7 @@ function emptyListing(userName = '', phone = '', telegram = '', whatsapp = '', s
     has_parking: false, has_air_conditioning: false, has_heating: false, pets_allowed: false,
     smoking_allowed: false, utilities_included: false, minimum_lease_months: 1,
     discount_tiers: [],
-    available_from: null, contact_name: userName, contact_phone: phone, show_contact_name: showName,
+    available_from: null, contact_name: userName, contact_phone: phone, contact_method: 'both', show_contact_name: showName,
     contact_telegram: telegram || null, contact_whatsapp: whatsapp || null,
   }
 }
@@ -82,9 +86,10 @@ function listingPayload(listing: Listing): ListingPayload {
     created_at: _created,
     updated_at: _updated,
     published_at: _published,
+    contact_phone,
     ...payload
   } = listing
-  return payload
+  return { ...payload, contact_phone: contact_phone || '' }
 }
 
 export default function AccountAccess({ lang, compact = false, onListingsChanged, onOverlayChange }: Props) {
@@ -99,10 +104,10 @@ export default function AccountAccess({ lang, compact = false, onListingsChanged
   useEffect(() => () => onOverlayChange?.(false), [onOverlayChange])
 
   if (loading) return <span className="account-loading" />
-  const overlay = <>
+  const overlay = <AnimatePresence initial={false}>
     {authOpen && <AuthModal lang={lang} onClose={() => setAuthOpen(false)} login={login} register={register} onSuccess={() => { setAuthOpen(false); setDashboardOpen(true) }} />}
     {dashboardOpen && user && <UiErrorBoundary lang={lang} onClose={() => setDashboardOpen(false)}><Dashboard lang={lang} onClose={() => setDashboardOpen(false)} onLogout={async () => { await logout(); setDashboardOpen(false) }} onListingsChanged={onListingsChanged} /></UiErrorBoundary>}
-  </>
+  </AnimatePresence>
   return <>
     <button type="button" className={`account-trigger${compact ? ' compact' : ''}`} onClick={() => user ? setDashboardOpen(true) : setAuthOpen(true)}>
       <span>{user ? user.full_name.slice(0, 1).toUpperCase() : '○'}</span>{compact ? '' : user ? t.account : t.login}
@@ -128,26 +133,26 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
       onSuccess()
     } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
   }
-  return <div className="account-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <section className="auth-modal">
+  return <><ErrorToast message={error} lang={lang} onDismiss={() => setError('')} /><motion.div className="account-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .22 }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <motion.section className="auth-modal" initial={{ opacity: 0, y: 32, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: .98 }} transition={{ duration: .34, ease: [.22, 1, .36, 1] }}>
       <button type="button" className="account-close" onClick={onClose} aria-label={t.close}>×</button>
       <HouseLogo className="auth-logo" /><p>BAKU · RENTAL ACCOUNT</p><h2>{mode === 'login' ? t.signin : t.signup}</h2>
       <form onSubmit={submit}>
         {mode === 'register' && <><label>{t.name}<input name="full_name" required minLength={2} autoComplete="name" /></label><label>{t.phone}<input name="phone" autoComplete="tel" /></label></>}
         <label>{t.email}<input name="email" type="email" required autoComplete="email" /></label>
         <label>{t.password}<input name="password" type="password" required minLength={mode === 'register' ? 10 : 1} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
-        {error && <div className="account-error">{error}</div>}
         <button type="submit" disabled={busy}>{busy ? t.saving : mode === 'login' ? t.login : t.signup}</button>
       </form>
       <button type="button" className="auth-mode" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>{mode === 'login' ? `${t.noAccount} ${t.signup}` : `${t.hasAccount} ${t.login}`}</button>
-    </section>
-  </div>
+    </motion.section>
+  </motion.div></>
 }
 
 function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang; onClose: () => void; onLogout: () => Promise<void>; onListingsChanged?: () => void }) {
   const { user, updateProfile } = useAuth()
   const t = text[lang]
   const x = extra[lang]
+  const mediaText = mediaEditorCopy[lang]
   const [tab, setTab] = useState<DashboardTab>('list')
   const [listings, setListings] = useState<Listing[]>([])
   const [refresh, setRefresh] = useState(0)
@@ -160,6 +165,8 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const [videos, setVideos] = useState<File[]>([])
   const [publishNow, setPublishNow] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [pendingAction, setPendingAction] = useState<{ kind: 'publish' | 'archive' | 'delete'; id: string } | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [favorites, setFavorites] = useState<Listing[]>([])
@@ -215,9 +222,20 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const uploadNewMedia = async (listingId: string) => {
     const existingPhotos = existingMedia.filter((item) => item.media_type === 'image')
     const nextOrder = (type: MediaType) => Math.max(-1, ...existingMedia.filter((item) => item.media_type === type).map((item) => item.sort_order)) + 1
-    for (const [index, photo] of photos.entries()) await api.uploadMedia(listingId, photo, 'image', !existingPhotos.length && index === 0, nextOrder('image') + index)
-    for (const [index, plan] of plans.entries()) await api.uploadMedia(listingId, plan, 'floor_plan', false, nextOrder('floor_plan') + index)
-    for (const [index, video] of videos.entries()) await api.uploadMedia(listingId, video, 'video', false, nextOrder('video') + index)
+    const uploads = [
+      ...photos.map((file, index) => ({ file, type: 'image' as const, cover: !existingPhotos.length && index === 0, order: nextOrder('image') + index })),
+      ...plans.map((file, index) => ({ file, type: 'floor_plan' as const, cover: false, order: nextOrder('floor_plan') + index })),
+      ...videos.map((file, index) => ({ file, type: 'video' as const, cover: false, order: nextOrder('video') + index })),
+    ]
+    setUploadProgress({ completed: 0, total: uploads.length })
+    for (const [index, upload] of uploads.entries()) {
+      const created = await api.uploadMedia(listingId, upload.file, upload.type, upload.cover, upload.order)
+      setExistingMedia((current) => [...current, created])
+      if (upload.type === 'image') setPhotos((current) => current.filter((file) => file !== upload.file))
+      if (upload.type === 'floor_plan') setPlans((current) => current.filter((file) => file !== upload.file))
+      if (upload.type === 'video') setVideos((current) => current.filter((file) => file !== upload.file))
+      setUploadProgress({ completed: index + 1, total: uploads.length })
+    }
   }
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError(''); setMessage('')
@@ -232,17 +250,27 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
 
       setMessage(editing ? t.updated : t.created)
       finishForm(); setRefresh((value) => value + 1); onListingsChanged?.()
-    } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
+    } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false); setUploadProgress(null) }
   }
   const action = async (kind: 'publish' | 'archive' | 'delete', id: string) => {
-    setError('')
+    if (pendingAction) return
+    if (kind === 'delete' && !window.confirm(lang === 'ru' ? 'Удалить объявление без возможности восстановления?' : lang === 'az' ? 'Elanı bərpa imkanı olmadan silmək?' : 'Delete this listing permanently?')) return
+    setPendingAction({ kind, id }); setError('')
     try {
-      if (kind === 'delete' && !window.confirm(lang === 'ru' ? 'Удалить объявление без возможности восстановления?' : lang === 'az' ? 'Elanı bərpa imkanı olmadan silmək?' : 'Delete this listing permanently?')) return
-      if (kind === 'publish') await api.publishListing(id)
-      if (kind === 'archive') await api.archiveListing(id)
-      if (kind === 'delete') await api.deleteListing(id)
+      if (kind === 'publish') {
+        const updated = await api.publishListing(id)
+        setListings((current) => current.map((listing) => listing.id === id ? updated : listing))
+      }
+      if (kind === 'archive') {
+        const updated = await api.archiveListing(id)
+        setListings((current) => current.map((listing) => listing.id === id ? updated : listing))
+      }
+      if (kind === 'delete') {
+        await api.deleteListing(id)
+        setListings((current) => current.filter((listing) => listing.id !== id))
+      }
       setRefresh((value) => value + 1); onListingsChanged?.()
-    } catch (err) { setError(err instanceof Error ? err.message : t.error) }
+    } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setPendingAction(null) }
   }
   const removeMedia = async (media: ListingMedia) => {
     if (!window.confirm(t.confirmMedia)) return
@@ -273,17 +301,20 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
     try { const item = await api.sendMessage(activeConversation, body); setChatMessages((current) => [...current, item]); event.currentTarget.reset() } catch (err) { setError(err instanceof Error ? err.message : t.error) }
   }
 
-  return <div className="account-backdrop dashboard-backdrop">
-    <section className="dashboard">
+  return <><ErrorToast message={error} lang={lang} onDismiss={() => setError('')} /><motion.div className="account-backdrop dashboard-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .24 }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <motion.section className="dashboard" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: .46, ease: [.22, 1, .36, 1] }}>
+      {busy && (tab === 'new' || tab === 'edit') && <div className="dashboard-busy"><BrandedLoader label={x.savingListing} detail={uploadProgress?.total ? `${x.watermarking} · ${uploadProgress.completed}/${uploadProgress.total}` : x.watermarking} /></div>}
       <header><div><HouseLogo className="auth-logo" /><div><p>{user?.email}</p><h2>{t.account}</h2></div></div><button type="button" className="account-close" onClick={onClose}>×</button></header>
       <nav><button type="button" className={tab === 'list' ? 'active' : ''} onClick={() => setTab('list')}>{t.my}<b>{listings.length}</b></button><button type="button" className={tab === 'new' ? 'active' : ''} onClick={startCreate}>{t.add}</button>{tab === 'edit' && <button type="button" className="active">{t.editing}</button>}<button type="button" className={tab === 'favorites' ? 'active' : ''} onClick={() => setTab('favorites')}>{x.favorites}</button><button type="button" className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>{x.chat}</button><button type="button" className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}>{x.profile}</button><button type="button" onClick={onLogout}>{t.logout}</button></nav>
       <main>
-        {error && <div className="account-error">{error}</div>}{message && <div className="account-success">{message}</div>}
+        {message && <div className="account-success">{message}</div>}
         {tab === 'list' ? <div className="dashboard-list">{listings.length ? listings.map((listing) => {
           const cover = listing.media.find((media) => media.is_cover) || listing.media.find((media) => media.media_type === 'image')
-          return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div><button type="button" className="edit" onClick={() => startEdit(listing)}>{t.edit}</button>{listing.status !== 'published' && <button type="button" onClick={() => action('publish', listing.id)}>{t.publish}</button>}{listing.status === 'published' && <button type="button" onClick={() => action('archive', listing.id)}>{t.archive}</button>}<button type="button" className="danger" onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
+          const pendingKind = pendingAction?.id === listing.id ? pendingAction.kind : null
+          const actionsLocked = pendingAction !== null
+          return <article key={listing.id} aria-busy={pendingKind !== null}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div><button type="button" className="edit" disabled={actionsLocked} onClick={() => startEdit(listing)}>{t.edit}</button>{listing.status !== 'published' && <button type="button" className={`listing-status-action${pendingKind === 'publish' ? ' loading' : ''}`} disabled={actionsLocked} aria-busy={pendingKind === 'publish'} onClick={() => action('publish', listing.id)}>{pendingKind === 'publish' ? <><span className="listing-action-spinner" aria-hidden="true" />{x.publishing}</> : t.publish}</button>}{listing.status === 'published' && <button type="button" className={`listing-status-action${pendingKind === 'archive' ? ' loading' : ''}`} disabled={actionsLocked} aria-busy={pendingKind === 'archive'} onClick={() => action('archive', listing.id)}>{pendingKind === 'archive' ? <><span className="listing-action-spinner" aria-hidden="true" />{x.archiving}</> : t.archive}</button>}<button type="button" className="danger" disabled={actionsLocked} onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
         }) : <div className="dashboard-empty">{t.empty}<button type="button" onClick={startCreate}>{t.add}</button></div>}</div> : tab === 'favorites' ?
-        <div className="dashboard-list">{favorites.length ? favorites.map((listing) => { const cover = listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image'); return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} {listing.rent_currency} · {listing.area_sqm} m²</p><div><button type="button" className="danger" onClick={async () => { await api.removeFavorite(listing.id); setFavorites((current) => current.filter((item) => item.id !== listing.id)) }}>{t.remove}</button></div></div></article> }) : <div className="dashboard-empty">{x.favorites}</div>}</div> : tab === 'chat' ?
+        <div className="dashboard-list">{favorites.length ? favorites.map((listing) => { const cover = listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image'); return <article key={listing.id}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} {listing.rent_currency} · {listing.area_sqm} m²</p><div><button type="button" className="danger" onClick={async () => { try { await api.removeFavorite(listing.id); setFavorites((current) => current.filter((item) => item.id !== listing.id)) } catch (err) { setError(err instanceof Error ? err.message : t.error) } }}>{t.remove}</button></div></div></article> }) : <div className="dashboard-empty">{x.favorites}</div>}</div> : tab === 'chat' ?
         <div className="chat-layout"><aside>{conversations.length ? conversations.map((item) => <button type="button" key={item.id} className={activeConversation === item.id ? 'active' : ''} onClick={() => setActiveConversation(item.id)}><b>{item.counterpart_name}</b><span>{item.listing_title}</span><small>{item.last_message?.body || '…'}</small></button>) : <p>{x.noChats}</p>}</aside><section>{activeConversation ? <><div className="chat-messages">{chatMessages.map((item) => <div key={item.id} className={item.sender_id === user?.id ? 'mine' : ''}>{item.body}<small>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></div>)}</div><form onSubmit={sendChat}><input name="body" required maxLength={2000} /><button type="submit">{x.send}</button></form></> : <div className="dashboard-empty">{x.chooseChat}</div>}</section></div> : tab === 'profile' ?
         <form className="profile-form" onSubmit={saveProfile}><h3>{x.profile}</h3><label>{t.name}<input required value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></label><label>{t.phone}<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>{x.telegram}<input placeholder="@username" value={profile.telegram} onChange={(event) => setProfile({ ...profile, telegram: event.target.value })} /></label><label>{x.whatsapp}<input value={profile.whatsapp} onChange={(event) => setProfile({ ...profile, whatsapp: event.target.value })} /></label><label className="profile-check"><input type="checkbox" checked={profile.show_full_name} onChange={(event) => setProfile({ ...profile, show_full_name: event.target.checked })} />{x.showName}</label><button type="submit" disabled={busy}>{busy ? t.saving : t.saveChanges}</button></form> :
         <form className="listing-form" onSubmit={submit}>
@@ -292,7 +323,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
             <label className="wide">{t.title}<input required minLength={5} value={form.title} onChange={(e) => field('title', e.target.value)} /></label>
             <label className="wide">{t.description}<textarea required minLength={20} rows={5} value={form.description} onChange={(e) => field('description', e.target.value)} /></label>
             <label>{t.type}<select value={form.property_type} onChange={(e) => field('property_type', e.target.value as PropertyType)}>{(Object.keys(propertyLabels[lang]) as PropertyType[]).map((value) => <option key={value} value={value}>{propertyLabels[lang][value]}</option>)}</select></label>
-            <label>{t.district}<select value={form.district} onChange={(e) => changeDistrict(e.target.value as DistrictId)}>{(Object.keys(districtLabels[lang]) as DistrictId[]).map((value) => <option key={value} value={value}>{districtLabels[lang][value]}</option>)}</select></label>
+            <label>{t.district}<select value={form.district} onChange={(e) => changeDistrict(e.target.value as DistrictId)}>{districts.map((item) => <option key={item.id} value={item.id}>{districtLabel(item.id, lang)}</option>)}</select></label>
             <AddressAutocomplete
               lang={lang}
               label={t.address}
@@ -330,14 +361,28 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           <section><h3>{t.amenities}</h3><div className="check-grid">{([
             ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_parking', t.parking], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
           ] as [keyof ListingPayload, string][]).map(([name, label]) => <label key={name}><input type="checkbox" checked={Boolean(form[name])} onChange={() => toggle(name)} /><span />{label}</label>)}</div></section>
-          {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}
-          <section><h3>{t.addMedia}</h3><div className="media-inputs"><FileField label={t.photos} accept="image/jpeg,image/png,image/webp,image/avif" files={photos} multiple maxBytes={15 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setPhotos} hint="JPG, PNG, WebP · max 15 MB" fileWord={t.files} /><FileField label={t.plan} accept="image/jpeg,image/png,image/webp,image/avif" files={plans} multiple maxBytes={15 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setPlans} hint="Image · max 15 MB" fileWord={t.files} /><FileField label={t.video} accept="video/mp4,video/webm,video/quicktime" files={videos} multiple maxBytes={100 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setVideos} hint="MP4, WebM · max 100 MB" fileWord={t.files} /></div></section>
-          <section><h3>{t.contact}</h3><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={() => toggle('show_contact_name')} />{x.showName}</label></div></section>
+          <section className="media-editor">
+            <header className="media-editor__heading"><div><h3>{mediaText.title}</h3><p>{editing ? mediaText.editHint : mediaText.createHint}</p></div>{editing && <strong>{existingMedia.length}</strong>}</header>
+            {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}
+            <div className="media-inputs"><FileField label={`＋ ${t.photos}`} accept="image/jpeg,image/png,image/webp,image/avif" files={photos} multiple maxBytes={15 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setPhotos} hint="JPG, PNG, WebP · max 15 MB" fileWord={t.files} /><FileField label={`＋ ${t.plan}`} accept="image/jpeg,image/png,image/webp,image/avif" files={plans} multiple maxBytes={15 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setPlans} hint="Image · max 15 MB" fileWord={t.files} /><FileField label={`＋ ${t.video}`} accept="video/mp4,video/webm,video/quicktime" files={videos} multiple maxBytes={100 * 1024 * 1024} onError={setError} errorMessage={mediaValidationError} onChange={setVideos} hint="MP4, WebM · max 100 MB" fileWord={t.files} /></div>
+            {(photos.length + plans.length + videos.length) > 0 && <div className="pending-media"><header><div><b>{mediaText.selected}</b><span>{mediaText.pending}</span></div><strong>{photos.length + plans.length + videos.length}</strong></header>{([
+              ...photos.map((file) => ({ file, type: 'image' as const, label: t.photos })),
+              ...plans.map((file) => ({ file, type: 'floor_plan' as const, label: t.plan })),
+              ...videos.map((file) => ({ file, type: 'video' as const, label: t.video })),
+            ]).map(({ file, type, label }) => <div key={`${type}-${file.name}-${file.lastModified}`}><span><b>{file.name}</b><small>{label} · {(file.size / 1024 / 1024).toFixed(1)} MB</small></span><button type="button" aria-label={`${mediaText.remove}: ${file.name}`} onClick={() => {
+              if (type === 'image') setPhotos((current) => current.filter((item) => item !== file))
+              if (type === 'floor_plan') setPlans((current) => current.filter((item) => item !== file))
+              if (type === 'video') setVideos((current) => current.filter((item) => item !== file))
+            }}>×</button></div>)}</div>}
+          </section>
+          <section className="contact-settings"><h3>{t.contact}</h3><p>{x.contactHint}</p><div className="contact-methods">{([
+            ['phone', x.phoneOnly, x.phoneOnlyHint], ['messages', x.messagesOnly, x.messagesOnlyHint], ['both', x.both, x.bothHint],
+          ] as [ContactMethod, string, string][]).map(([value, label, hint]) => <label key={value} className={form.contact_method === value ? 'active' : ''}><input type="radio" name="contact_method" value={value} checked={form.contact_method === value} onChange={() => field('contact_method', value)} /><span><b>{label}</b><small>{hint}</small></span><i>✓</i></label>)}</div><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required={form.contact_method !== 'messages'} value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={() => toggle('show_contact_name')} />{x.showName}</label></div></section>
           <div className="form-submit">{(!editing || editing.status !== 'published') && <label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label>}<button type="submit" disabled={busy}>{busy ? t.saving : editing ? t.saveChanges : publishNow ? t.createPublish : t.saveDraft}</button></div>
         </form>}
       </main>
-    </section>
-  </div>
+    </motion.section>
+  </motion.div></>
 }
 
 function MediaManager({ media, t, onCover, onRemove }: {
@@ -349,13 +394,13 @@ function MediaManager({ media, t, onCover, onRemove }: {
   const sections: Array<{ type: MediaType; label: string }> = [
     { type: 'image', label: t.photos }, { type: 'floor_plan', label: t.plan }, { type: 'video', label: t.video },
   ]
-  return <section className="existing-media"><h3>{t.currentMedia}</h3>{sections.map((section) => {
+  return <div className="existing-media"><h3>{t.currentMedia}</h3>{sections.map((section) => {
     const items = media.filter((item) => item.media_type === section.type)
     return <div className="existing-media__group" key={section.type}><h4>{section.label}<span>{items.length}</span></h4>{items.length ? <div className="existing-media__grid">{items.map((item) => <article key={item.id}>
       {item.media_type === 'video' ? <video src={mediaUrl(item.url)} preload="metadata" /> : <img src={mediaUrl(item.url)} alt={item.caption || item.original_name} />}
       <div><span title={item.original_name}>{item.original_name}</span><div>{item.media_type === 'image' && (item.is_cover ? <b>{t.cover}</b> : <button type="button" onClick={() => onCover(item)}>{t.makeCover}</button>)}<button type="button" className="danger" onClick={() => onRemove(item)}>{t.deleteMedia}</button></div></div>
     </article>)}</div> : <p>{t.noMedia}</p>}</div>
-  })}</section>
+  })}</div>
 }
 
 function FileField({ label, accept, files, multiple, maxBytes, onChange, onError, errorMessage, hint, fileWord }: {
@@ -370,7 +415,9 @@ function FileField({ label, accept, files, multiple, maxBytes, onChange, onError
       return
     }
     onError('')
-    onChange(selected)
+    const combined = [...files, ...selected].filter((file, index, all) => all.findIndex((candidate) => candidate.name === file.name && candidate.size === file.size && candidate.lastModified === file.lastModified) === index)
+    onChange(combined)
+    event.currentTarget.value = ''
   }} /><span>{files.length ? `${files.length} ${fileWord}` : hint}</span></label>
 }
 
@@ -381,6 +428,9 @@ function AddressAutocomplete({ lang, label, value, onChange, onSelect }: {
   onChange: (value: string) => void
   onSelect: (suggestion: AddressSuggestion) => void
 }) {
+  const inputId = useId()
+  const menuId = `${inputId}-menu`
+  const inputRef = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<AddressSuggestion[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -401,38 +451,49 @@ function AddressAutocomplete({ lang, label, value, onChange, onSelect }: {
     const timer = window.setTimeout(() => {
       setLoading(true)
       api.addressAutocomplete(query, lang)
-        .then((suggestions) => { if (active) setItems(suggestions) })
+        .then((suggestions) => {
+          if (!active) return
+          setItems(suggestions)
+          if (document.activeElement === inputRef.current) setOpen(true)
+        })
         .catch(() => { if (active) setItems([]) })
         .finally(() => { if (active) setLoading(false) })
     }, 320)
     return () => { active = false; window.clearTimeout(timer) }
   }, [lang, value])
 
-  return <label className="wide address-autocomplete">
-    {label}
+  return <div className={`wide address-autocomplete${open ? ' is-open' : ''}`}>
+    <label htmlFor={inputId}>{label}</label>
     <input
+      ref={inputRef}
+      id={inputId}
       required
       value={value}
       placeholder={hint}
       autoComplete="off"
-      onFocus={() => setOpen(true)}
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded={open && (loading || items.length > 0)}
+      aria-controls={menuId}
+      onFocus={() => { if (value.trim().length >= 3) setOpen(true) }}
       onChange={(event) => { onChange(event.target.value); setOpen(true) }}
-      onBlur={() => window.setTimeout(() => setOpen(false), 160)}
+      onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false) }}
+      onBlur={() => window.setTimeout(() => setOpen(false), 220)}
     />
-    {open && (loading || items.length > 0) && <div className="address-autocomplete__menu" role="listbox">
+    {open && (loading || items.length > 0) && <div id={menuId} className="address-autocomplete__menu" role="listbox">
       {loading && <span className="address-autocomplete__loading">…</span>}
       {!loading && items.map((item) => <button
         key={item.place_id}
         type="button"
         role="option"
-        onMouseDown={(event) => event.preventDefault()}
+        onPointerDown={(event) => event.preventDefault()}
         onClick={() => { onSelect(item); setItems([]); setOpen(false) }}
       >
         <b>{item.label}</b>
         {item.district && <small>{item.district}</small>}
       </button>)}
     </div>}
-  </label>
+  </div>
 }
 
 function NumberField({ label, value, onChange, required = false, step = '1' }: { label: string; value: number; onChange: (value: number) => void; required?: boolean; step?: string }) {

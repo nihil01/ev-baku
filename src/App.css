@@ -1,4 +1,5 @@
 :root {
+  --font-display: Georgia, 'Times New Roman', serif;
   font-family: 'Manrope Variable', Manrope, system-ui, sans-serif;
   color: #123f34;
   background: #123f34;
@@ -8,7 +9,7 @@
 
 * { box-sizing: border-box; }
 html { min-width: 320px; scroll-behavior: smooth; }
-body { min-width: 320px; min-height: 100vh; margin: 0; }
+body { min-width: 320px; min-height: 100vh; margin: 0; overflow-x: hidden; }
 button, a, input, select { font: inherit; }
 button { border: 0; cursor: pointer; }
 a { color: inherit; text-decoration: none; }
@@ -58,20 +59,30 @@ button:focus-visible, a:focus-visible { outline: 3px solid #f07843; outline-offs
 .site-header .account-trigger { min-height: 42px; color: #fff; background: rgba(255,255,255,.1); font-size: 11px; }
 .site-header .account-trigger>span { color: #173c34; background: #f07843; }
 .map-chunk-loader { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; background: #e8eee9; }
-.map-chunk-loader span { width: 24px; height: 24px; border: 2px solid #bed0c7; border-top-color: #f07843; border-radius: 50%; animation: app-spin .8s linear infinite; }
-@keyframes app-spin { to { transform: rotate(360deg); } }
+.map-entry-transition { position: fixed; z-index: 500; inset: 0; display: grid; place-items: center; overflow: hidden; color: #fff; background: radial-gradient(circle at 65% 25%,rgba(244,201,93,.28),transparent 24%),radial-gradient(circle at 25% 78%,rgba(132,199,208,.28),transparent 24%),#103f32; }
+.map-entry-transition::before { content: ''; position: absolute; inset: 0; opacity: .14; background-image: linear-gradient(rgba(255,255,255,.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.13) 1px,transparent 1px); background-size: 54px 54px; }
+.map-entry-transition__loader { position: relative; z-index: 1; display: grid; justify-items: center; gap: 13px; padding: 28px; }
+.map-entry-transition .brand-loader { color: #fff; }
+.map-entry-transition .brand-loader__logo { color: #fff; }
+.map-entry-transition .brand-loader__orbit { border-color: rgba(255,255,255,.2); border-top-color: #f4c95d; border-right-color: #f07843; }
+.map-entry-transition .brand-loader__orbit::after { border-color: rgba(255,255,255,.2); }
+.map-entry-transition__loader>span { color: #bfd0c7; font-size: 12px; text-align: center; }
 
 @media (min-width: 1700px) {
   .site-header { padding-left: max(5.5vw, calc((100vw - 1560px) / 2)); padding-right: max(5.5vw, calc((100vw - 1560px) / 2)); }
 }
 
 @media (max-width: 600px) {
-  .site-header { height: 72px; padding: 0 20px; }
+  .site-header { height: 72px; gap: 10px; padding: 0 16px; }
   .site-logo { width: 42px; height: 42px; font-size: 20px; }
   .site-brand__wordmark { display: none; }
-  .site-header__actions>.account-trigger { width: 40px; padding: 4px; font-size: 0; }
+  .site-header__actions { min-width: 0; gap: 6px; }
+  .site-languages { gap: 1px; padding: 2px; }
+  .site-languages button { min-width: 32px; min-height: 38px; padding: 5px; font-size: 10px; }
+  .site-header__actions>.account-trigger { width: 44px; min-height: 44px; padding: 5px; font-size: 0; }
+  .site-header__actions>.account-trigger>span { width: 34px; height: 34px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .map-chunk-loader span { animation: none; }
+  html { scroll-behavior: auto; }
 }

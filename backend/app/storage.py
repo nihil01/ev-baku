@@ -1,4 +1,5 @@
 import asyncio
+import io
 import mimetypes
 import os
 import tempfile
@@ -8,12 +9,56 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 from minio import Minio
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .config import Settings
 from .models import MediaType
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif"}
 VIDEO_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
+WATERMARK_PATH = Path(__file__).parent / "data" / "logo.png"
+IMAGE_FORMATS = {
+    "image/jpeg": "JPEG",
+    "image/png": "PNG",
+    "image/webp": "WEBP",
+    "image/avif": "AVIF",
+}
+
+
+def add_watermark(source: bytes, content_type: str) -> bytes:
+    """Bake a small, translucent brand mark into an uploaded image."""
+    try:
+        with Image.open(io.BytesIO(source)) as opened:
+            opened.load()
+            image = ImageOps.exif_transpose(opened).convert("RGBA")
+        with Image.open(WATERMARK_PATH) as opened_logo:
+            logo = opened_logo.convert("RGBA")
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as error:
+        raise HTTPException(status_code=422, detail="Invalid or damaged image") from error
+
+    target_width = max(4, min(180, round(image.width * 0.14), round(image.height * 0.26)))
+    target_height = max(1, round(logo.height * target_width / logo.width))
+    logo = logo.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    logo_alpha = logo.getchannel("A").point(lambda value: round(value * 0.36))
+    logo.putalpha(logo_alpha)
+
+    position = (
+        max(0, (image.width - logo.width) // 2),
+        max(0, (image.height - logo.height) // 2),
+    )
+    image.alpha_composite(logo, position)
+
+    output = io.BytesIO()
+    image_format = IMAGE_FORMATS[content_type]
+    if image_format == "JPEG":
+        image.convert("RGB").save(output, image_format, quality=90, optimize=True, progressive=True)
+    elif image_format == "PNG":
+        image.save(output, image_format, optimize=True)
+    elif image_format == "WEBP":
+        image.save(output, image_format, quality=90, method=6)
+    else:
+        image.save(output, image_format, quality=85)
+    return output.getvalue()
 
 
 class ObjectStorage:
@@ -77,6 +122,13 @@ class ObjectStorage:
             if size == 0:
                 raise HTTPException(status_code=422, detail="Empty file")
             stream.seek(0)
+            if media_type != MediaType.video:
+                watermarked = await asyncio.to_thread(add_watermark, stream.read(), content_type)
+                size = len(watermarked)
+                stream.seek(0)
+                stream.truncate(0)
+                stream.write(watermarked)
+                stream.seek(0)
             if self.client:
                 await asyncio.to_thread(
                     self.client.put_object,

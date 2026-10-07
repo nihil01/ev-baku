@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
-from ..models import ChatMessage, Conversation, Favorite, Listing, ListingStatus, User
+from ..models import ChatMessage, ContactMethod, Conversation, Favorite, Listing, ListingStatus, User
 from ..schemas import ChatMessageCreate, ChatMessageRead, ConversationRead, ListingRead, Message
 from ..serializers import listing_to_dict
 
@@ -67,6 +67,8 @@ async def start_conversation(listing_id: str, auth: AuthContext = Depends(csrf_p
         raise HTTPException(status_code=404, detail="Listing not found")
     if listing.owner_id == auth.user.id:
         raise HTTPException(status_code=409, detail="You cannot start a conversation with yourself")
+    if listing.contact_method == ContactMethod.phone:
+        raise HTTPException(status_code=403, detail="This owner accepts phone contact only")
     conversation = (await db.execute(select(Conversation).where(
         Conversation.listing_id == listing_id, Conversation.buyer_id == auth.user.id
     ))).scalar_one_or_none()
@@ -120,6 +122,9 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     conversation = await accessible_conversation(conversation_id, auth.user.id, db)
+    listing = await db.get(Listing, conversation.listing_id)
+    if listing and listing.contact_method == ContactMethod.phone:
+        raise HTTPException(status_code=403, detail="This owner accepts phone contact only")
     message = ChatMessage(conversation_id=conversation.id, sender_id=auth.user.id, body=payload.body.strip())
     conversation.updated_at = datetime.now(UTC)
     db.add(message)

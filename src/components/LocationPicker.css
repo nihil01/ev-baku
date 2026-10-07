@@ -7,5 +7,4 @@
 .location-picker__marker i { font-style: normal; transform: rotate(45deg); }
 .location-picker__coords { display: flex; gap: 7px; }
 .location-picker__coords span { padding: 6px 9px; border-radius: 999px; color: #5d7269; background: #eef2ed; font-size: 8px; }
-.location-picker__error { padding: 8px 10px; border-radius: 7px; color: #9f321d; background: #ffe7e0; font-size: 8px; }
 @media(max-width:650px){.location-picker__top{align-items:flex-start;flex-direction:column}.location-picker__map{height:240px}}

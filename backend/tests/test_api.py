@@ -1,5 +1,6 @@
 import os
 import tempfile
+from io import BytesIO
 from pathlib import Path
 
 TEST_DATA = Path(tempfile.mkdtemp(prefix="ev-baku-api-test-"))
@@ -10,8 +11,12 @@ os.environ["LOCAL_STORAGE_PATH"] = str(TEST_DATA / "uploads")
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-the-settings-model"
 
 from fastapi.testclient import TestClient
+from PIL import Image, ImageChops
 
 from app.main import app
+from app.external import PLACE_CATEGORIES
+from app.models import District
+from app.storage import add_watermark
 
 LISTING = {
     "title": "Bright apartment near the city center",
@@ -47,6 +52,47 @@ LISTING = {
     "contact_name": "Test Owner",
     "contact_phone": "+994501112233",
 }
+
+
+def test_all_baku_districts_are_supported():
+    assert {district.value for district in District} == {
+        "sabail", "yasamal", "nasimi", "narimanov", "khatai", "nizami",
+        "binagadi", "sabunchu", "surakhani", "qaradag", "khazar", "pirallahi",
+    }
+
+
+def test_nearby_categories_cover_daily_life():
+    for category in (
+        "healthcare.hospital",
+        "education.school",
+        "education.university",
+        "commercial.supermarket",
+        "catering.restaurant",
+        "public_transport.subway",
+        "leisure.park",
+    ):
+        assert category in PLACE_CATEGORIES
+
+
+def make_test_jpeg(color: tuple[int, int, int] = (235, 238, 230)) -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (640, 420), color).save(output, "JPEG", quality=92)
+    return output.getvalue()
+
+
+def test_watermark_is_baked_into_image_center():
+    source = BytesIO()
+    original = Image.new("RGB", (800, 600), "white")
+    original.save(source, "PNG")
+
+    result = Image.open(BytesIO(add_watermark(source.getvalue(), "image/png"))).convert("RGB")
+    changed = ImageChops.difference(original, result).getbbox()
+
+    assert changed is not None
+    left, top, right, bottom = changed
+    assert abs(((left + right) / 2) - (original.width / 2)) < 3
+    assert abs(((top + bottom) / 2) - (original.height / 2)) < 3
+    assert result.getpixel((original.width - 10, original.height - 10)) == (255, 255, 255)
 
 
 class FakeExchangeRates:
@@ -122,14 +168,37 @@ def test_user_listing_media_publish_flow():
         assert updated.status_code == 200
         assert updated.json()["title"] == "Updated Baku rental apartment"
 
+        # Edit forms submit validated discount tiers again alongside media changes.
+        discount_update = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={
+                "discount_tiers": [
+                    {"min_months": 6, "discount_percent": 7.5},
+                    {"min_months": 12, "discount_percent": 12},
+                ]
+            },
+            headers=headers,
+        )
+        assert discount_update.status_code == 200, discount_update.text
+        assert discount_update.json()["discount_tiers"] == [
+            {"min_months": 6, "discount_percent": 7.5},
+            {"min_months": 12, "discount_percent": 12.0},
+        ]
+
+        original_photo = make_test_jpeg()
         uploaded = client.post(
             f"/api/v1/listings/{listing_id}/media",
             headers=headers,
             data={"media_type": "image", "is_cover": "true"},
-            files={"file": ("home.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+            files={"file": ("home.jpg", original_photo, "image/jpeg")},
         )
         assert uploaded.status_code == 201, uploaded.text
         first_media_id = uploaded.json()["id"]
+        watermarked = client.get(f"/api/v1/media/{first_media_id}")
+        assert watermarked.status_code == 200
+        assert watermarked.content != original_photo
+        with Image.open(BytesIO(watermarked.content)) as stored_image:
+            assert stored_image.size == (640, 420)
 
         published = client.post(f"/api/v1/listings/{listing_id}/publish", headers=headers)
         assert published.status_code == 200, published.text
@@ -165,7 +234,7 @@ def test_user_listing_media_publish_flow():
             f"/api/v1/listings/{listing_id}/media",
             headers=headers,
             data={"media_type": "image", "is_cover": "false"},
-            files={"file": ("second.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+            files={"file": ("second.jpg", make_test_jpeg((220, 228, 235)), "image/jpeg")},
         )
         assert second_upload.status_code == 201, second_upload.text
         second_media_id = second_upload.json()["id"]
@@ -182,6 +251,19 @@ def test_user_listing_media_publish_flow():
         assert public.json()["items"][0]["title"] == "Updated published apartment in Baku"
         assert public.json()["items"][0]["utilities_included"] is True
         assert public.json()["items"][0]["media"][0]["url"].startswith("/api/v1/media/")
+
+        private_contact = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={"contact_method": "messages"},
+            headers=headers,
+        )
+        assert private_contact.status_code == 200, private_contact.text
+        assert private_contact.json()["contact_phone"] == "+994501112233"
+        public_private = client.get(f"/api/v1/listings/{listing_id}").json()
+        assert public_private["contact_method"] == "messages"
+        assert public_private["contact_phone"] is None
+        assert public_private["contact_telegram"] is None
+        assert client.get("/api/v1/me/listings").json()[0]["contact_phone"] == "+994501112233"
         ai_results = client.get("/api/v1/listings/ai-search?q=balcony%20yasamal")
         assert ai_results.status_code == 200, ai_results.text
         assert ai_results.json()["mode"] == "text"
@@ -210,6 +292,18 @@ def test_user_listing_media_publish_flow():
                 headers=buyer_headers, json={"body": "Is this home still available?"},
             )
             assert sent.status_code == 201, sent.text
+            phone_only = client.patch(
+                f"/api/v1/listings/{listing_id}",
+                json={"contact_method": "phone"},
+                headers=headers,
+            )
+            assert phone_only.status_code == 200, phone_only.text
+            assert buyer.post(f"/api/v1/listings/{listing_id}/conversations", headers=buyer_headers).status_code == 403
+            assert buyer.post(
+                f"/api/v1/conversations/{conversation_id}/messages",
+                headers=buyer_headers,
+                json={"body": "Can I still write?"},
+            ).status_code == 403
             assert buyer.delete(f"/api/v1/listings/{listing_id}/favorite", headers=buyer_headers).status_code == 200
             assert buyer.get("/api/v1/me/favorites").json() == []
 

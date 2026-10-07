@@ -3,10 +3,11 @@ import Map, { Marker, NavigationControl, type MapLayerMouseEvent, type MapRef, t
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { MAP_STYLE_URL } from '../lib/api'
+import { bakuMaxBounds } from '../data/mapConfig'
 import type { Lang } from '../types/api'
+import ErrorToast from './ErrorToast'
 import './LocationPicker.css'
 
-const BAKU_BOUNDS: [number, number, number, number] = [49.65, 40.25, 50.15, 40.65]
 const copy = {
   az: { hint: 'Xəritədə nöqtə seçin və ya cari mövqedən istifadə edin.', current: 'Cari mövqeyim', locating: 'Axtarılır…', outside: 'Mövqe Bakı sərhədlərindən kənardadır.', denied: 'Geolokasiyanı əldə etmək mümkün olmadı.' },
   en: { hint: 'Click the map or drag the marker, or use your current location.', current: 'Use my location', locating: 'Locating…', outside: 'This location is outside Baku.', denied: 'Your location could not be accessed.' },
@@ -14,7 +15,8 @@ const copy = {
 } as const
 
 function inside(longitude: number, latitude: number) {
-  return longitude >= 49.65 && longitude <= 50.15 && latitude >= 40.25 && latitude <= 40.65
+  const [west, south, east, north] = bakuMaxBounds
+  return longitude >= west && longitude <= east && latitude >= south && latitude <= north
 }
 
 function LocationPicker({ lang, latitude, longitude, onChange }: {
@@ -45,8 +47,8 @@ function LocationPicker({ lang, latitude, longitude, onChange }: {
     mapRef.current?.flyTo({ center: [longitude, latitude], zoom: Math.max(mapRef.current.getZoom(), 13), duration: 500 })
   }, [latitude, longitude])
   return <div className="location-picker">
+    <ErrorToast message={error} lang={lang} onDismiss={() => setError('')} />
     <div className="location-picker__top"><p>{t.hint}</p><button type="button" onClick={locate} disabled={locating}>◎ {locating ? t.locating : t.current}</button></div>
-    {error && <div className="location-picker__error">{error}</div>}
     <div className="location-picker__map">
       <Map
         ref={mapRef}
@@ -54,7 +56,7 @@ function LocationPicker({ lang, latitude, longitude, onChange }: {
         workerUrl={workerUrl}
         mapStyle={MAP_STYLE_URL}
         initialViewState={{ longitude, latitude, zoom: 13 }}
-        maxBounds={BAKU_BOUNDS}
+        maxBounds={bakuMaxBounds}
         minZoom={10}
         maxZoom={18}
         renderWorldCopies={false}

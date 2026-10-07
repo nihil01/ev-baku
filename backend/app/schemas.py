@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator, model_validator
 
-from .models import Currency, District, ListingStatus, MediaType, PropertyType, UserRole
+from .models import ContactMethod, Currency, District, ListingStatus, MediaType, PropertyType, UserRole
 
 
 class UserRegister(BaseModel):
@@ -68,8 +68,8 @@ class ListingBase(BaseModel):
     property_type: PropertyType
     district: District
     address: str = Field(min_length=5, max_length=300)
-    latitude: Decimal = Field(ge=Decimal("40.25"), le=Decimal("40.65"))
-    longitude: Decimal = Field(ge=Decimal("49.65"), le=Decimal("50.15"))
+    latitude: Decimal = Field(ge=Decimal("39.78"), le=Decimal("40.80"))
+    longitude: Decimal = Field(ge=Decimal("49.15"), le=Decimal("50.55"))
     monthly_rent: Decimal = Field(gt=0, le=1_000_000)
     rent_currency: Currency = Currency.AZN
     deposit: Decimal | None = Field(default=None, ge=0, le=1_000_000)
@@ -93,7 +93,8 @@ class ListingBase(BaseModel):
     discount_tiers: list[DiscountTier] = Field(default_factory=list, max_length=8)
     available_from: date | None = None
     contact_name: str = Field(min_length=2, max_length=120)
-    contact_phone: str = Field(min_length=5, max_length=32)
+    contact_phone: str = Field(default="", max_length=32)
+    contact_method: ContactMethod = ContactMethod.both
     show_contact_name: bool = True
     contact_telegram: str | None = Field(default=None, max_length=64)
     contact_whatsapp: str | None = Field(default=None, max_length=64)
@@ -116,6 +117,8 @@ class ListingBase(BaseModel):
         if len(months) != len(set(months)):
             raise ValueError("Discount periods must be unique")
         self.discount_tiers.sort(key=lambda tier: tier.min_months)
+        if self.contact_method in {ContactMethod.phone, ContactMethod.both} and len(self.contact_phone.strip()) < 5:
+            raise ValueError("A phone number is required for the selected contact method")
         return self
 
 
@@ -129,8 +132,8 @@ class ListingUpdate(BaseModel):
     property_type: PropertyType | None = None
     district: District | None = None
     address: str | None = Field(default=None, min_length=5, max_length=300)
-    latitude: Decimal | None = Field(default=None, ge=Decimal("40.25"), le=Decimal("40.65"))
-    longitude: Decimal | None = Field(default=None, ge=Decimal("49.65"), le=Decimal("50.15"))
+    latitude: Decimal | None = Field(default=None, ge=Decimal("39.78"), le=Decimal("40.80"))
+    longitude: Decimal | None = Field(default=None, ge=Decimal("49.15"), le=Decimal("50.55"))
     monthly_rent: Decimal | None = Field(default=None, gt=0, le=1_000_000)
     rent_currency: Currency | None = None
     deposit: Decimal | None = Field(default=None, ge=0, le=1_000_000)
@@ -154,7 +157,8 @@ class ListingUpdate(BaseModel):
     discount_tiers: list[DiscountTier] | None = Field(default=None, max_length=8)
     available_from: date | None = None
     contact_name: str | None = Field(default=None, min_length=2, max_length=120)
-    contact_phone: str | None = Field(default=None, min_length=5, max_length=32)
+    contact_phone: str | None = Field(default=None, max_length=32)
+    contact_method: ContactMethod | None = None
     show_contact_name: bool | None = None
     contact_telegram: str | None = Field(default=None, max_length=64)
     contact_whatsapp: str | None = Field(default=None, max_length=64)
@@ -168,6 +172,16 @@ class ListingUpdate(BaseModel):
         if len(months) != len(set(months)):
             raise ValueError("Discount periods must be unique")
         return sorted(tiers, key=lambda tier: tier.min_months)
+
+    @model_validator(mode="after")
+    def validate_contact_method(self):
+        if (
+            self.contact_method in {ContactMethod.phone, ContactMethod.both}
+            and self.contact_phone is not None
+            and len(self.contact_phone.strip()) < 5
+        ):
+            raise ValueError("A phone number is required for the selected contact method")
+        return self
 
 
 class MediaRead(BaseModel):
@@ -206,6 +220,9 @@ class ListingRead(ListingBase):
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None
+
+    # Public responses redact the stored phone for message-only listings.
+    contact_phone: str | None
 
     @field_serializer("monthly_rent_azn", when_used="json")
     def serialize_azn(self, value: Decimal) -> float:

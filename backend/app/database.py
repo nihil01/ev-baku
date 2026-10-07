@@ -42,6 +42,22 @@ async def create_schema() -> None:
         await connection.run_sync(Base.metadata.create_all)
         if settings.database_url.startswith("sqlite"):
             await _migrate_sqlite(connection)
+        elif settings.database_url.startswith("postgresql"):
+            await _migrate_postgresql(connection)
+
+
+async def _migrate_postgresql(connection) -> None:
+    """Keep additive fields deployable on existing installations."""
+    for district in ("binagadi", "sabunchu", "surakhani", "qaradag", "khazar", "pirallahi"):
+        await connection.execute(text(f"ALTER TYPE district ADD VALUE IF NOT EXISTS '{district}'"))
+    await connection.execute(text(
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS "
+        "contact_method VARCHAR(16) NOT NULL DEFAULT 'both'"
+    ))
+    await connection.execute(text(
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS "
+        "nearby_cache_version INTEGER NOT NULL DEFAULT 0"
+    ))
 
 
 async def _migrate_sqlite(connection) -> None:
@@ -58,8 +74,10 @@ async def _migrate_sqlite(connection) -> None:
             "show_contact_name": "BOOLEAN NOT NULL DEFAULT 1",
             "contact_telegram": "VARCHAR(64)",
             "contact_whatsapp": "VARCHAR(64)",
+            "contact_method": "VARCHAR(16) NOT NULL DEFAULT 'both'",
             "nearby_places": "JSON",
             "nearby_updated_at": "DATETIME",
+            "nearby_cache_version": "INTEGER NOT NULL DEFAULT 0",
         },
     }
     for table, columns in additions.items():

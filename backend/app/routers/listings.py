@@ -9,8 +9,22 @@ from sqlalchemy.orm import selectinload
 from ..ai_search import EmbeddingService, cosine_similarity, listing_embedding_text, source_hash, text_similarity
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
-from ..external import ExchangeRateService, GeoapifyService
-from ..models import District, Listing, ListingDiscountTier, ListingEmbedding, ListingStatus, MediaType, PropertyType
+from ..external import (
+    NEARBY_CACHE_VERSION,
+    NEARBY_DISPLAY_RADIUS_METERS,
+    ExchangeRateService,
+    GeoapifyService,
+)
+from ..models import (
+    ContactMethod,
+    District,
+    Listing,
+    ListingDiscountTier,
+    ListingEmbedding,
+    ListingStatus,
+    MediaType,
+    PropertyType,
+)
 from ..schemas import (
     AiSearchResponse,
     DiscountTier,
@@ -44,11 +58,17 @@ async def owned_listing(listing_id: str, owner_id: str, db: AsyncSession) -> Lis
 
 
 def replace_discount_tiers(listing: Listing, tiers: list[DiscountTier]) -> None:
-    listing.discount_tiers.clear()
-    listing.discount_tiers.extend(
-        ListingDiscountTier(min_months=tier.min_months, discount_percent=tier.discount_percent)
-        for tier in tiers
-    )
+    existing_by_months = {tier.min_months: tier for tier in listing.discount_tiers}
+    updated_tiers: list[ListingDiscountTier] = []
+
+    for tier in tiers:
+        stored_tier = existing_by_months.pop(tier.min_months, None)
+        if stored_tier is None:
+            stored_tier = ListingDiscountTier(min_months=tier.min_months)
+        stored_tier.discount_percent = tier.discount_percent
+        updated_tiers.append(stored_tier)
+
+    listing.discount_tiers[:] = updated_tiers
 
 
 async def refresh_embedding(listing: Listing, request: Request, db: AsyncSession) -> None:
@@ -72,20 +92,32 @@ async def refresh_embedding(listing: Listing, request: Request, db: AsyncSession
         db.add(ListingEmbedding(listing_id=listing.id, vector=vector, model=service.model, source_hash=digest))
 
 
-async def refresh_nearby_snapshot(listing: Listing, request: Request) -> None:
-    """Persist one provider response; displaying a listing never calls the provider."""
+async def refresh_nearby_snapshot(
+    listing: Listing,
+    request: Request,
+    *,
+    radius: int = NEARBY_DISPLAY_RADIUS_METERS,
+    lang: str = "ru",
+    suppress_errors: bool = True,
+) -> None:
+    """Persist one provider response so repeated listing views stay cache-only."""
     service: GeoapifyService = request.app.state.geoapify
     try:
         listing.nearby_places = await service.nearby(
             float(listing.latitude),
             float(listing.longitude),
-            lang="ru",
+            radius=radius,
+            lang=lang,
         )
         listing.nearby_updated_at = datetime.now(UTC)
+        listing.nearby_cache_version = NEARBY_CACHE_VERSION
     except HTTPException:
+        if not suppress_errors:
+            raise
         # Nearby infrastructure is an enhancement and must never block listing creation.
         listing.nearby_places = None
         listing.nearby_updated_at = None
+        listing.nearby_cache_version = 0
 
 
 @router.get("/listings", response_model=ListingPage)
@@ -210,6 +242,9 @@ async def listing_detail(listing_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/listings/{listing_id}/nearby", response_model=list[NearbyPlace])
 async def listing_nearby(
     listing_id: str,
+    request: Request,
+    radius: int = Query(default=NEARBY_DISPLAY_RADIUS_METERS, ge=300, le=5000),
+    lang: str = Query(default="ru", pattern="^(az|en|ru)$"),
     db: AsyncSession = Depends(get_db),
 ):
     listing = (await db.execute(select(Listing).where(
@@ -217,6 +252,15 @@ async def listing_nearby(
     ))).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
+    if listing.nearby_places is None or listing.nearby_cache_version < NEARBY_CACHE_VERSION:
+        await refresh_nearby_snapshot(
+            listing,
+            request,
+            radius=radius,
+            lang=lang,
+            suppress_errors=False,
+        )
+        await db.commit()
     return listing.nearby_places or []
 
 
@@ -225,7 +269,10 @@ async def my_listings(auth: AuthContext = Depends(current_auth), db: AsyncSessio
     result = await db.execute(
         select(Listing).options(*listing_load_options()).where(Listing.owner_id == auth.user.id).order_by(Listing.updated_at.desc())
     )
-    return [ListingRead.model_validate(listing_to_dict(item)) for item in result.scalars().unique().all()]
+    return [
+        ListingRead.model_validate(listing_to_dict(item, redact_private_contact=False))
+        for item in result.scalars().unique().all()
+    ]
 
 
 @router.post("/listings", response_model=ListingRead, status_code=status.HTTP_201_CREATED)
@@ -242,11 +289,14 @@ async def create_listing(
     replace_discount_tiers(listing, payload.discount_tiers)
     db.add(listing)
     await db.flush()
-    await refresh_nearby_snapshot(listing, request)
+    # A listing is not complete without its persisted neighbourhood snapshot.
+    # Fetch it in the creation transaction so every successful response already
+    # contains the places that will be shown on cards and in the detail view.
+    await refresh_nearby_snapshot(listing, request, suppress_errors=False)
     await refresh_embedding(listing, request, db)
     await db.commit()
     await db.refresh(listing, attribute_names=["media", "discount_tiers"])
-    return ListingRead.model_validate(listing_to_dict(listing))
+    return ListingRead.model_validate(listing_to_dict(listing, redact_private_contact=False))
 
 
 @router.patch("/listings/{listing_id}", response_model=ListingRead)
@@ -258,8 +308,15 @@ async def update_listing(
     db: AsyncSession = Depends(get_db),
 ):
     listing = await owned_listing(listing_id, auth.user.id, db)
-    values = payload.model_dump(exclude_unset=True)
-    tiers = values.pop("discount_tiers", None)
+    tiers_supplied = "discount_tiers" in payload.model_fields_set
+    tiers = payload.discount_tiers if tiers_supplied else None
+    values = payload.model_dump(exclude_unset=True, exclude={"discount_tiers"})
+    next_contact_method = values.get("contact_method", listing.contact_method)
+    next_contact_phone = values.get("contact_phone", listing.contact_phone) or ""
+    if next_contact_method in {ContactMethod.phone, ContactMethod.both} and len(next_contact_phone.strip()) < 5:
+        raise HTTPException(status_code=422, detail="A phone number is required for the selected contact method")
+    if "contact_phone" in values:
+        values["contact_phone"] = next_contact_phone
     location_changed = (
         ("latitude" in values and values["latitude"] != listing.latitude)
         or ("longitude" in values and values["longitude"] != listing.longitude)
@@ -271,16 +328,16 @@ async def update_listing(
         values["monthly_rent_azn"] = await exchange.to_azn(amount, currency)
     for key, value in values.items():
         setattr(listing, key, value)
-    if "discount_tiers" in payload.model_fields_set:
+    if tiers_supplied:
         replace_discount_tiers(listing, tiers or [])
     listing.updated_at = datetime.now(UTC)
     await db.flush()
     if location_changed or listing.nearby_updated_at is None:
-        await refresh_nearby_snapshot(listing, request)
+        await refresh_nearby_snapshot(listing, request, suppress_errors=False)
     await refresh_embedding(listing, request, db)
     await db.commit()
     await db.refresh(listing, attribute_names=["media", "discount_tiers"])
-    return ListingRead.model_validate(listing_to_dict(listing))
+    return ListingRead.model_validate(listing_to_dict(listing, redact_private_contact=False))
 
 
 @router.post("/listings/{listing_id}/publish", response_model=ListingRead)
@@ -299,7 +356,7 @@ async def publish_listing(
     await refresh_embedding(listing, request, db)
     await db.commit()
     await db.refresh(listing, attribute_names=["media", "discount_tiers"])
-    return ListingRead.model_validate(listing_to_dict(listing))
+    return ListingRead.model_validate(listing_to_dict(listing, redact_private_contact=False))
 
 
 @router.post("/listings/{listing_id}/archive", response_model=ListingRead)
@@ -312,7 +369,7 @@ async def archive_listing(
     listing.status = ListingStatus.archived
     await db.commit()
     await db.refresh(listing, attribute_names=["media", "discount_tiers"])
-    return ListingRead.model_validate(listing_to_dict(listing))
+    return ListingRead.model_validate(listing_to_dict(listing, redact_private_contact=False))
 
 
 @router.delete("/listings/{listing_id}", response_model=Message)

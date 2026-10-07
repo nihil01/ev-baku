@@ -38,6 +38,12 @@ class District(str, enum.Enum):
     narimanov = "narimanov"
     khatai = "khatai"
     nizami = "nizami"
+    binagadi = "binagadi"
+    sabunchu = "sabunchu"
+    surakhani = "surakhani"
+    qaradag = "qaradag"
+    khazar = "khazar"
+    pirallahi = "pirallahi"
 
 
 class MediaType(str, enum.Enum):
@@ -51,6 +57,12 @@ class Currency(str, enum.Enum):
     USD = "USD"
     EUR = "EUR"
     RUB = "RUB"
+
+
+class ContactMethod(str, enum.Enum):
+    phone = "phone"
+    messages = "messages"
+    both = "both"
 
 
 class User(Base):
@@ -127,9 +139,11 @@ class Listing(Base):
     available_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     nearby_places: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     nearby_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    nearby_cache_version: Mapped[int] = mapped_column(Integer, default=0)
 
     contact_name: Mapped[str] = mapped_column(String(120))
     contact_phone: Mapped[str] = mapped_column(String(32))
+    contact_method: Mapped[ContactMethod] = mapped_column(Enum(ContactMethod), default=ContactMethod.both)
     show_contact_name: Mapped[bool] = mapped_column(Boolean, default=True)
     contact_telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)
     contact_whatsapp: Mapped[str | None] = mapped_column(String(64), nullable=True)
