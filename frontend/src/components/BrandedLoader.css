@@ -1,0 +1,21 @@
+.brand-loader { display: grid; justify-items: center; gap: 10px; color: #173c34; text-align: center; }
+.brand-loader__mark { position: relative; width: 86px; height: 86px; display: grid; place-items: center; }
+.brand-loader__logo { position: relative; z-index: 2; width: 52px; height: 52px; display: block; filter: drop-shadow(0 7px 12px rgba(23,60,52,.16)); animation: brand-loader-breathe 1.8s ease-in-out infinite; }
+.brand-loader__orbit { position: absolute; inset: 3px; border: 1px solid rgba(23,60,52,.15); border-top-color: #f07843; border-right-color: rgba(240,120,67,.55); border-radius: 50%; animation: brand-loader-orbit 1.15s cubic-bezier(.55,.18,.38,.88) infinite; }
+.brand-loader__orbit::after { content: ''; position: absolute; inset: 8px; border: 1px dashed rgba(23,60,52,.15); border-radius: inherit; animation: brand-loader-orbit 2.3s linear infinite reverse; }
+.brand-loader__spark { position: absolute; z-index: 3; width: 7px; height: 7px; border-radius: 50%; background: #f07843; box-shadow: 0 0 0 5px rgba(240,120,67,.12); }
+.brand-loader__spark--one { top: 7px; right: 16px; animation: brand-loader-spark 1.15s ease-in-out infinite; }
+.brand-loader__spark--two { bottom: 12px; left: 13px; width: 5px; height: 5px; animation: brand-loader-spark 1.15s .45s ease-in-out infinite; }
+.brand-loader strong { font-size: 12px; letter-spacing: -.01em; }
+.brand-loader small { max-width: 280px; color: #71847c; font-size: 10px; line-height: 1.45; }
+.brand-loader--compact { gap: 0; }
+.brand-loader--compact .brand-loader__mark { width: 64px; height: 64px; }
+.brand-loader--compact .brand-loader__logo { width: 38px; height: 38px; }
+
+@keyframes brand-loader-orbit { to { transform: rotate(360deg); } }
+@keyframes brand-loader-breathe { 50% { transform: scale(.92); filter: drop-shadow(0 4px 8px rgba(23,60,52,.12)); } }
+@keyframes brand-loader-spark { 50% { transform: scale(.45); opacity: .35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-loader__logo,.brand-loader__orbit,.brand-loader__orbit::after,.brand-loader__spark { animation: none; }
+}
