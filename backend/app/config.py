@@ -2,66 +2,92 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_parse_none_str="null",
+        extra="ignore",
+    )
 
-    cors_allow_all: bool = False
+    cors_allow_all: bool
 
-    app_name: str = "ev. Baku API"
-    environment: str = "development"
-    api_prefix: str = "/api/v1"
-    secret_key: str = Field(default="change-me-in-production-please-use-64-random-characters", min_length=32)
+    app_name: str
+    environment: str
+    api_prefix: str
+    secret_key: str = Field(min_length=32)
 
-    database_url: str = "sqlite+aiosqlite:///./data/ev.db"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080"
-    trusted_hosts: str = "localhost,127.0.0.1,testserver"
+    database_url: str
+    cors_origins: str
+    trusted_hosts: str
 
-    session_cookie_name: str = "ev_session"
-    csrf_cookie_name: str = "ev_csrf"
-    session_ttl_days: int = 14
-    cookie_secure: bool = False
-    cookie_domain: str | None = None
+    session_cookie_name: str
+    csrf_cookie_name: str
+    session_ttl_days: int
+    cookie_secure: bool
+    cookie_domain: str | None
 
-    storage_backend: str = "minio"
-    local_storage_path: Path = Path("./data/uploads")
-    landing_video_path: Path = Path(__file__).resolve().parents[1] / "data"
+    storage_backend: str
+    local_storage_path: Path
+    landing_video_path: Path
 
-    minio_endpoint: str = "garage:3900"
-    minio_public_endpoint: str = "localhost:9000"
+    minio_endpoint: str
+    minio_public_endpoint: str
+    minio_access_key: str
+    minio_secret_key: str
+    minio_bucket: str
+    minio_region: str
+    minio_secure: bool
+    minio_public_secure: bool
 
-    minio_access_key: str = "evminio"
-    minio_secret_key: str = "evminio-change-me"
-    minio_bucket: str = "ev-media"
+    max_image_mb: int
+    max_video_mb: int
 
-    minio_region: str = "garage"
-    minio_secure: bool = False
-    minio_public_secure: bool = False
+    geoapify_api_key: str | None
+    geoapify_radius_meters: int
+    exchange_rate_provider: str
+    exchange_rate_api_key: str | None
+    exchange_rate_base_url: str | None
+    exchange_rate_cache_seconds: int
 
-    max_image_mb: int = 15
-    max_video_mb: int = 100
+    openai_api_key: str | None
+    openai_base_url: str
+    openai_embedding_model: str
+    openai_timeout_seconds: float
 
-    geoapify_api_key: str | None = None
-    geoapify_radius_meters: int = 1000
-    exchange_rate_provider: str = "exchangerate-api"
-    exchange_rate_api_key: str | None = None
-    exchange_rate_base_url: str | None = None
-    exchange_rate_cache_seconds: int = 21600
-
-    openai_api_key: str | None = None
-    openai_base_url: str = "https://api.openai.com/v1"
-    openai_embedding_model: str = "text-embedding-3-small"
-    openai_timeout_seconds: float = 20
+    @classmethod
+    def settings_customise_sources(
+            cls,
+            settings_cls: type[BaseSettings],
+            init_settings: PydanticBaseSettingsSource,
+            env_settings: PydanticBaseSettingsSource,
+            dotenv_settings: PydanticBaseSettingsSource,
+            file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (dotenv_settings,)
 
     @property
     def allowed_origins(self) -> list[str]:
-        return [value.strip().rstrip("/") for value in self.cors_origins.split(",") if value.strip()]
+        return [
+            value.strip().rstrip("/")
+            for value in self.cors_origins.split(",")
+            if value.strip()
+        ]
 
     @property
     def allowed_hosts(self) -> list[str]:
-        return [value.strip() for value in self.trusted_hosts.split(",") if value.strip()]
+        return [
+            value.strip()
+            for value in self.trusted_hosts.split(",")
+            if value.strip()
+        ]
 
     @property
     def is_production(self) -> bool:
