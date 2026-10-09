@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     storage_backend: str = "minio"
     local_storage_path: Path = Path("./data/uploads")
+    landing_video_path: Path = Path(__file__).resolve().parents[1] / "data"
 
     minio_endpoint: str = "garage:3900"
     minio_public_endpoint: str = "localhost:9000"

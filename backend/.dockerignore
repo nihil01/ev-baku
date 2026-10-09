@@ -1,7 +1,9 @@
 .venv
 .pytest_cache
 .ruff_cache
-data
+# Keep runtime data out of the image, except the curated landing videos.
+data/*
+!data/*.mp4
 tests
 __pycache__
 *.pyc

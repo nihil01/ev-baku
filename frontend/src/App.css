@@ -23,8 +23,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid #f07843; outline-offs
 .root-error small { display: block; margin-top: 18px; color: #f2b79d; font-size: 10px; overflow-wrap: anywhere; }
 
 .site-header {
-  position: relative;
+  position: absolute;
   z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
   height: 88px;
   display: flex;
   align-items: center;
@@ -33,7 +36,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #f07843; outline-offs
   padding: 0 6vw;
   border-bottom: 1px solid rgba(255,255,255,.12);
   color: #fff;
-  background: rgba(18,63,52,.97);
+  background: linear-gradient(180deg,rgba(4,25,20,.76),rgba(4,25,20,.18));
   backdrop-filter: blur(16px);
 }
 
@@ -52,11 +55,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid #f07843; outline-offs
 }
 .house-logo img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .house-logo svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2.7; stroke-linecap: round; stroke-linejoin: round; }
-.site-languages { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: rgba(255,255,255,.08); }
+.site-languages { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; background: rgba(6,30,24,.34); backdrop-filter: blur(12px); }
 .site-header__actions { display: flex; align-items: center; gap: 9px; }
 .site-languages button { min-width: 38px; padding: 8px; border-radius: 999px; color: #b8cdc3; background: transparent; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
 .site-languages button.active { color: #173c34; background: #fff; }
-.site-header .account-trigger { min-height: 42px; color: #fff; background: rgba(255,255,255,.1); font-size: 11px; }
+.site-header .account-trigger { min-height: 42px; color: #fff; border: 1px solid rgba(255,255,255,.2); background: rgba(6,30,24,.34); backdrop-filter: blur(12px); font-size: 11px; }
 .site-header .account-trigger>span { color: #173c34; background: #f07843; }
 .map-chunk-loader { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; background: #e8eee9; }
 .map-entry-transition { position: fixed; z-index: 500; inset: 0; display: grid; place-items: center; overflow: hidden; color: #fff; background: radial-gradient(circle at 65% 25%,rgba(244,201,93,.28),transparent 24%),radial-gradient(circle at 25% 78%,rgba(132,199,208,.28),transparent 24%),#103f32; }

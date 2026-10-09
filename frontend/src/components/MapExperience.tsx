@@ -34,7 +34,7 @@ import ErrorToast from './ErrorToast'
 import { useAuth } from '../context/AuthContext'
 import './MapExperience.css'
 
-type Props = { lang: Lang; initialAiQuery?: string; onReady?: () => void; onClose: () => void }
+type Props = { lang: Lang; initialAiQuery?: string; initialListingId?: string; onReady?: () => void; onClose: () => void }
 type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
@@ -294,7 +294,7 @@ function NearbyIcon({ type }: { type: NearbyAmenityKey }) {
   </svg>
 }
 
-export default function MapExperience({ lang, initialAiQuery = '', onReady, onClose }: Props) {
+export default function MapExperience({ lang, initialAiQuery = '', initialListingId, onReady, onClose }: Props) {
   const t = copy[lang]
   const x = detailExtra[lang]
   const nearbyText = nearbyCopy[lang]
@@ -305,6 +305,7 @@ export default function MapExperience({ lang, initialAiQuery = '', onReady, onCl
   const galleryTriggerRef = useRef<HTMLButtonElement | null>(null)
   const lightboxRef = useRef<HTMLDivElement | null>(null)
   const lightboxCloseRef = useRef<HTMLButtonElement | null>(null)
+  const initialListingOpenedRef = useRef<string | null>(null)
   const [layout, setLayout] = useState<Layout>('split')
   const [query, setQuery] = useState('')
   const [aiResults, setAiResults] = useState<Listing[] | null>(null)
@@ -374,6 +375,15 @@ export default function MapExperience({ lang, initialAiQuery = '', onReady, onCl
   }, [])
 
   useEffect(() => { if (initialAiQuery) void runAiSearch(initialAiQuery) }, [initialAiQuery, runAiSearch])
+
+  useEffect(() => {
+    if (!initialListingId || initialListingOpenedRef.current === initialListingId) return
+    const listing = listings.find((item) => item.id === initialListingId)
+    if (!listing) return
+    initialListingOpenedRef.current = initialListingId
+    setGalleryIndex(0)
+    setDetailListing(listing)
+  }, [initialListingId, listings])
 
   useEffect(() => {
     const fallback = window.setTimeout(() => setLoaded(true), 2800)

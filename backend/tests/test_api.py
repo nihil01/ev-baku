@@ -2,6 +2,7 @@ import os
 import tempfile
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 TEST_DATA = Path(tempfile.mkdtemp(prefix="ev-baku-api-test-"))
 
@@ -13,8 +14,8 @@ os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-the-settings
 from fastapi.testclient import TestClient
 from PIL import Image, ImageChops
 
-from app.main import app
 from app.external import PLACE_CATEGORIES
+from app.main import app
 from app.models import District
 from app.storage import add_watermark
 
@@ -93,6 +94,25 @@ def test_watermark_is_baked_into_image_center():
     assert abs(((left + right) / 2) - (original.width / 2)) < 3
     assert abs(((top + bottom) / 2) - (original.height / 2)) < 3
     assert result.getpixel((original.width - 10, original.height - 10)) == (255, 255, 255)
+
+
+def test_landing_videos_are_listed_and_support_range_requests():
+    with TestClient(app) as client:
+        manifest = client.get("/api/v1/landing-videos")
+        assert manifest.status_code == 200
+        videos = manifest.json()
+        assert videos
+        assert all(video["content_type"].startswith("video/") for video in videos)
+
+        filename = quote(videos[0]["filename"], safe="")
+        response = client.get(
+            f"/api/v1/landing-videos/{filename}",
+            headers={"Range": "bytes=0-31"},
+        )
+        assert response.status_code == 206
+        assert response.headers["content-type"].startswith("video/")
+        assert response.headers["content-range"].startswith("bytes 0-31/")
+        assert len(response.content) == 32
 
 
 class FakeExchangeRates:

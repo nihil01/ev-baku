@@ -7,6 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml ./
 COPY app ./app
+COPY data/*.mp4 ./landing-videos/
+ENV LANDING_VIDEO_PATH=/app/landing-videos
 RUN pip install --upgrade pip && pip install .
 RUN mkdir -p /app/data && useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser

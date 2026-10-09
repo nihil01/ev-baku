@@ -3,6 +3,13 @@ import type { AddressSuggestion, AiSearchResponse, ChatMessage, Conversation, Ex
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const MAP_STYLE_URL = `${API_BASE}/map-style.json`
 export const BRAND_LOGO_URL = `${API_BASE}/branding/logo.png`
+export const apiUrl = (path: string) => `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+
+export type LandingVideo = {
+  filename: string
+  content_type: string
+  size_bytes: number
+}
 
 export class ApiError extends Error {
   status: number
@@ -25,7 +32,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const csrf = cookie('ev_csrf')
     if (csrf) headers.set('X-CSRF-Token', csrf)
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
+  const response = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
   if (!response.ok) {
     let message = `Request failed (${response.status})`
     try {
@@ -66,6 +73,7 @@ export const api = {
   deleteMedia: (mediaId: string) => request<{ message: string }>(`/media/${mediaId}`, { method: 'DELETE' }),
   addressAutocomplete: (query: string, lang: 'az' | 'en' | 'ru') => request<AddressSuggestion[]>(`/addresses/autocomplete?q=${encodeURIComponent(query)}&lang=${lang}`),
   exchangeRates: () => request<ExchangeRates>('/exchange-rates'),
+  landingVideos: () => request<LandingVideo[]>('/landing-videos'),
   favorites: () => request<Listing[]>('/me/favorites'),
   addFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'POST' }),
   removeFavorite: (listingId: string) => request<{ message: string }>(`/listings/${listingId}/favorite`, { method: 'DELETE' }),

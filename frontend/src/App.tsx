@@ -6,6 +6,7 @@ import ConstructionHero from './components/ConstructionHero'
 import AccountAccess from './components/AccountAccess'
 import HouseLogo from './components/HouseLogo'
 import BrandedLoader from './components/BrandedLoader'
+import LandingListings from './components/LandingListings'
 import { startAvailabilityNotificationScheduler } from './lib/availabilityNotifications'
 import type { Lang } from './types/api'
 import './App.css'
@@ -22,6 +23,7 @@ export default function App() {
   const [lang, setLang] = useState<Lang>(initialLanguage)
   const [mapOpen, setMapOpen] = useState(false)
   const [aiQuery, setAiQuery] = useState('')
+  const [initialListingId, setInitialListingId] = useState<string | null>(null)
   const [mapTransition, setMapTransition] = useState<{ x: number; y: number; radius: number } | null>(null)
   const transitionStartedAt = useRef(0)
   const openTimer = useRef<number | null>(null)
@@ -45,9 +47,10 @@ export default function App() {
 
   useEffect(() => startAvailabilityNotificationScheduler(), [])
 
-  const openMap = useCallback((query = '', origin?: { x: number; y: number }) => {
+  const openMap = useCallback((query = '', origin?: { x: number; y: number }, listingId: string | null = null) => {
     if (mapOpen || mapTransition) return
     setAiQuery(query)
+    setInitialListingId(listingId)
     if (reduceMotion) {
       setMapOpen(true)
       return
@@ -94,11 +97,16 @@ export default function App() {
         onContinue={(origin) => openMap('', origin)}
         onAiSearch={(query, origin) => openMap(query, origin)}
       />
+      <LandingListings
+        lang={lang}
+        onExplore={(origin) => openMap('', origin)}
+        onOpenListing={(listingId, origin) => openMap('', origin, listingId)}
+      />
     </main>
 
     <AnimatePresence mode="wait">
       {mapOpen && <Suspense key="rental-map" fallback={<div className="map-chunk-loader"><BrandedLoader label={lang === 'ru' ? 'Открываем карту Баку…' : lang === 'az' ? 'Bakı xəritəsi açılır…' : 'Opening the Baku map…'} /></div>}>
-        <MapExperience lang={lang} initialAiQuery={aiQuery} onReady={finishMapTransition} onClose={() => { setMapTransition(null); setMapOpen(false) }} />
+        <MapExperience lang={lang} initialAiQuery={aiQuery} initialListingId={initialListingId || undefined} onReady={finishMapTransition} onClose={() => { setMapTransition(null); setMapOpen(false); setInitialListingId(null) }} />
       </Suspense>}
     </AnimatePresence>
 
