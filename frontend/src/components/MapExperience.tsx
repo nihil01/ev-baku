@@ -20,7 +20,7 @@ import {
   districts,
   type District,
 } from '../data/mapConfig'
-import { api, ApiError, MAP_STYLE_URL, mediaUrl } from '../lib/api'
+import { api, ApiError, listingUrl, MAP_STYLE_URL, mediaUrl } from '../lib/api'
 import {
   hasAvailabilityReminder,
   removeAvailabilityReminder,
@@ -314,7 +314,6 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   const listingCosts = listingCostsCopy[lang]
   const { user } = useAuth()
   const mapRef = useRef<MapRef | null>(null)
-  const cardRefs = useRef<Record<string, HTMLElement | null>>({})
   const galleryTriggerRef = useRef<HTMLButtonElement | null>(null)
   const lightboxRef = useRef<HTMLDivElement | null>(null)
   const lightboxCloseRef = useRef<HTMLButtonElement | null>(null)
@@ -406,10 +405,15 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   useEffect(() => {
     if (!initialListingId || initialListingOpenedRef.current === initialListingId) return
     const listing = listings.find((item) => item.id === initialListingId)
-    if (!listing) return
     initialListingOpenedRef.current = initialListingId
-    setGalleryIndex(0)
-    setDetailListing(listing)
+    if (listing) {
+      setGalleryIndex(0)
+      setDetailListing(listing)
+      return
+    }
+    api.listing(initialListingId)
+      .then((item) => { setGalleryIndex(0); setDetailListing(item) })
+      .catch((error) => setToastError(error instanceof Error ? error.message : 'Listing unavailable'))
   }, [initialListingId, listings])
 
   useEffect(() => {
@@ -563,26 +567,6 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
       })
     }
   }
-
-  const focusListing = useCallback((listing: Listing, openDetail = false) => {
-    setSelectedListing(listing.id)
-    if (layout !== 'list') {
-      mapRef.current?.flyTo({
-        center: [Number(listing.longitude), Number(listing.latitude)],
-        zoom: 15.25,
-        pitch: tilted ? 48 : 0,
-        bearing: tilted ? -14 : 0,
-        duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 650,
-      })
-    }
-    if (layout !== 'map') {
-      requestAnimationFrame(() => cardRefs.current[listing.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
-    }
-    if (openDetail) {
-      setGalleryIndex(0)
-      setDetailListing(listing)
-    }
-  }, [layout, tilted])
 
   const clearFilters = () => {
     setQuery('')
@@ -831,12 +815,11 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
           {baseResults.map((listing) => {
             const active = selectedListing === listing.id
             return <Marker key={listing.id} longitude={Number(listing.longitude)} latitude={Number(listing.latitude)} anchor="bottom">
-              <button type="button" className={`price-marker${active ? ' active' : ''}`} onClick={(event) => {
-                event.stopPropagation()
-                focusListing(listing)
+              <a className={`price-marker${active ? ' active' : ''}`} href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer" onClick={(event) => {
+                event.stopPropagation(); setSelectedListing(listing.id)
               }} aria-label={`${listing.title}: ${Number(listing.latitude).toFixed(5)}, ${Number(listing.longitude).toFixed(5)}`}>
                 <Icon name="home" /><span>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]}</span>
-              </button>
+              </a>
             </Marker>
           })}
         </Map>
@@ -882,7 +865,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
             return <motion.article className="map-selected-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
               {cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="listing-image-placeholder"><Icon name="home" /></div>}
               <div><span>{t.selectedHome}</span><b>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]} <small>{t.month}</small></b><p>{listing.rooms} {t.rooms.toLowerCase()} · {listing.area_sqm} {t.area}</p><small className="listing-coordinates">⌖ {Number(listing.latitude).toFixed(5)}, {Number(listing.longitude).toFixed(5)}</small></div>
-              <button type="button" onClick={() => focusListing(listing, true)}>{t.view}<Icon name="arrow" /></button>
+              <a href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer">{t.view}<Icon name="arrow" /></a>
             </motion.article>
           })()}
         </AnimatePresence>
@@ -911,16 +894,15 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
             const nearbyHighlights = nearbyHighlightsFor(listing)
             return <article
               key={listing.id}
-              ref={(node) => { cardRefs.current[listing.id] = node }}
               className={`listing-card${active ? ' active' : ''}`}
               onMouseEnter={() => setSelectedListing(listing.id)}
               onMouseLeave={() => { if (selectedListing !== listing.id) setSelectedListing(null) }}
-              onClick={() => focusListing(listing)}
             >
-              <button type="button" className="listing-card__image" onClick={(event) => { event.stopPropagation(); focusListing(listing, true) }}>
+              <a className="listing-card__open" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer" aria-label={`${t.view}: ${listing.title}`} />
+              <div className="listing-card__image">
                 {cover ? <img src={mediaUrl(cover.url)} alt={`${listing.title}, ${listing.address}`} loading="lazy" /> : <span className="listing-image-placeholder"><Icon name="home" /></span>}
                 <span>{t.available}</span>
-              </button>
+              </div>
               <button type="button" className={`listing-save${isSaved ? ' active' : ''}`} aria-label={isSaved ? t.unsave : t.save} onClick={(event) => { event.stopPropagation(); toggleSaved(listing.id) }}>
                 <Icon name="heart" />
               </button>
@@ -936,7 +918,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
                     <strong>{nearbyDistance(place.distance_meters, x.distance)}</strong>
                   </div>)}
                 </div>}
-                <button type="button" className="listing-details" onClick={(event) => { event.stopPropagation(); focusListing(listing, true) }}>{t.view}<Icon name="arrow" /></button>
+                <span className="listing-details">{t.view}<Icon name="arrow" /></span>
               </div>
             </article>
           })}

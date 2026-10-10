@@ -7,11 +7,38 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
-from ..models import ChatMessage, ContactMethod, Conversation, Favorite, Listing, ListingStatus, User
+from ..models import ChatMessage, ContactMethod, Conversation, Favorite, Listing, ListingStatus, MediaType, User
 from ..schemas import ChatMessageCreate, ChatMessageRead, ConversationRead, ListingRead, Message
 from ..serializers import listing_to_dict
 
 router = APIRouter(tags=["social"])
+
+
+def conversation_read(
+    conversation: Conversation,
+    listing: Listing,
+    counterpart: User,
+    last_message: ChatMessage | None = None,
+) -> ConversationRead:
+    cover = next(
+        (item for item in listing.media if item.media_type == MediaType.image and item.is_cover),
+        next((item for item in listing.media if item.media_type == MediaType.image), None),
+    )
+    return ConversationRead(
+        id=conversation.id,
+        listing_id=listing.id,
+        listing_title=listing.title,
+        listing_address=listing.address,
+        listing_district=listing.district,
+        listing_monthly_rent=float(listing.monthly_rent),
+        listing_rent_currency=listing.rent_currency,
+        listing_cover_url=f"/api/v1/media/{cover.id}" if cover else None,
+        listing_status=listing.status,
+        counterpart_name=counterpart.full_name,
+        counterpart_id=counterpart.id,
+        updated_at=conversation.updated_at,
+        last_message=ChatMessageRead.model_validate(last_message) if last_message else None,
+    )
 
 
 async def accessible_conversation(conversation_id: str, user_id: str, db: AsyncSession) -> Conversation:
@@ -62,7 +89,7 @@ async def remove_favorite(listing_id: str, auth: AuthContext = Depends(csrf_prot
 async def start_conversation(listing_id: str, auth: AuthContext = Depends(csrf_protected), db: AsyncSession = Depends(get_db)):
     listing = (await db.execute(select(Listing).where(
         Listing.id == listing_id, Listing.status == ListingStatus.published
-    ))).scalar_one_or_none()
+    ).options(selectinload(Listing.media)))).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     if listing.owner_id == auth.user.id:
@@ -78,9 +105,7 @@ async def start_conversation(listing_id: str, auth: AuthContext = Depends(csrf_p
         await db.commit()
         await db.refresh(conversation)
     owner = (await db.execute(select(User).where(User.id == listing.owner_id))).scalar_one()
-    return ConversationRead(id=conversation.id, listing_id=listing.id, listing_title=listing.title,
-                            counterpart_name=owner.full_name, counterpart_id=owner.id,
-                            updated_at=conversation.updated_at)
+    return conversation_read(conversation, listing, owner)
 
 
 @router.get("/me/conversations", response_model=list[ConversationRead])
@@ -90,18 +115,15 @@ async def conversations(auth: AuthContext = Depends(current_auth), db: AsyncSess
     ).order_by(Conversation.updated_at.desc()))).scalars().all()
     output = []
     for item in rows:
-        listing = (await db.execute(select(Listing).where(Listing.id == item.listing_id))).scalar_one()
+        listing = (await db.execute(
+            select(Listing).options(selectinload(Listing.media)).where(Listing.id == item.listing_id)
+        )).scalar_one()
         counterpart_id = item.owner_id if item.buyer_id == auth.user.id else item.buyer_id
         counterpart = (await db.execute(select(User).where(User.id == counterpart_id))).scalar_one()
         last = (await db.execute(select(ChatMessage).where(
             ChatMessage.conversation_id == item.id
         ).order_by(ChatMessage.created_at.desc()).limit(1))).scalar_one_or_none()
-        output.append(ConversationRead(
-            id=item.id, listing_id=item.listing_id, listing_title=listing.title,
-            counterpart_name=counterpart.full_name, counterpart_id=counterpart_id,
-            updated_at=item.updated_at,
-            last_message=ChatMessageRead.model_validate(last) if last else None,
-        ))
+        output.append(conversation_read(item, listing, counterpart, last))
     return output
 
 

@@ -385,7 +385,15 @@ def test_user_listing_media_publish_flow():
             assert buyer.get("/api/v1/me/favorites").json()[0]["id"] == listing_id
             conversation = buyer.post(f"/api/v1/listings/{listing_id}/conversations", headers=buyer_headers)
             assert conversation.status_code == 200, conversation.text
-            conversation_id = conversation.json()["id"]
+            conversation_data = conversation.json()
+            conversation_id = conversation_data["id"]
+            assert conversation_data["listing_title"] == "Updated published apartment in Baku"
+            assert conversation_data["listing_address"] == LISTING["address"]
+            assert conversation_data["listing_district"] == "yasamal"
+            assert conversation_data["listing_monthly_rent"] == 1000
+            assert conversation_data["listing_rent_currency"] == "USD"
+            assert conversation_data["listing_cover_url"].startswith("/api/v1/media/")
+            assert conversation_data["listing_status"] == "published"
             sent = buyer.post(
                 f"/api/v1/conversations/{conversation_id}/messages",
                 headers=buyer_headers, json={"body": "Is this home still available?"},
@@ -409,6 +417,7 @@ def test_user_listing_media_publish_flow():
         owner_conversations = client.get("/api/v1/me/conversations")
         assert owner_conversations.status_code == 200
         assert owner_conversations.json()[0]["counterpart_name"] == "Test Buyer"
+        assert owner_conversations.json()[0]["listing_cover_url"].startswith("/api/v1/media/")
         assert client.get(f"/api/v1/conversations/{conversation_id}/messages").json()[0]["body"].startswith("Is this")
 
         archived = client.post(f"/api/v1/listings/{listing_id}/archive", headers=headers)

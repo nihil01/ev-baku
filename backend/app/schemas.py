@@ -317,6 +317,12 @@ class ConversationRead(BaseModel):
     id: str
     listing_id: str
     listing_title: str
+    listing_address: str
+    listing_district: District
+    listing_monthly_rent: float
+    listing_rent_currency: Currency
+    listing_cover_url: str | None = None
+    listing_status: ListingStatus
     counterpart_name: str
     counterpart_id: str
     updated_at: datetime

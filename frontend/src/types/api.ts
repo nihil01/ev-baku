@@ -143,6 +143,12 @@ export type Conversation = {
   id: string
   listing_id: string
   listing_title: string
+  listing_address: string
+  listing_district: DistrictId
+  listing_monthly_rent: number
+  listing_rent_currency: Currency
+  listing_cover_url: string | null
+  listing_status: ListingStatus
   counterpart_name: string
   counterpart_id: string
   updated_at: string

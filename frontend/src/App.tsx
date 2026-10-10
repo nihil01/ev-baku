@@ -19,12 +19,17 @@ function initialLanguage(): Lang {
   return languages.includes(stored as Lang) ? stored as Lang : 'az'
 }
 
+function listingFromUrl() {
+  return new URLSearchParams(window.location.search).get('listing')?.trim() || null
+}
+
 export default function App() {
+  const directListingId = useRef(listingFromUrl()).current
   const [lang, setLang] = useState<Lang>(initialLanguage)
-  const [mapOpen, setMapOpen] = useState(false)
+  const [mapOpen, setMapOpen] = useState(Boolean(directListingId))
   const [aiQuery, setAiQuery] = useState('')
   const [initialAiResults, setInitialAiResults] = useState<AiSearchResponse | null>(null)
-  const [initialListingId, setInitialListingId] = useState<string | null>(null)
+  const [initialListingId, setInitialListingId] = useState<string | null>(directListingId)
   const [mapTransition, setMapTransition] = useState<{ x: number; y: number; radius: number } | null>(null)
   const transitionStartedAt = useRef(0)
   const openTimer = useRef<number | null>(null)
@@ -102,7 +107,6 @@ export default function App() {
       <LandingListings
         lang={lang}
         onExplore={(origin) => openMap('', origin)}
-        onOpenListing={(listingId, origin) => openMap('', origin, listingId)}
       />
     </main>
 

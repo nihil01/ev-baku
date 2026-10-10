@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { districtLabel } from '../data/mapConfig'
-import { api, mediaUrl } from '../lib/api'
+import { api, listingUrl, mediaUrl } from '../lib/api'
 import type { Lang, Listing } from '../types/api'
 import './LandingListings.css'
 
@@ -9,7 +9,6 @@ type Point = { x: number; y: number }
 type Props = {
   lang: Lang
   onExplore: (origin: Point) => void
-  onOpenListing: (listingId: string, origin: Point) => void
 }
 
 const copy = {
@@ -33,7 +32,7 @@ function origin(element: HTMLElement): Point {
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
 }
 
-export default function LandingListings({ lang, onExplore, onOpenListing }: Props) {
+export default function LandingListings({ lang, onExplore }: Props) {
   const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -65,7 +64,7 @@ export default function LandingListings({ lang, onExplore, onOpenListing }: Prop
       {listings.map((listing, index) => {
         const cover = listing.media.find((item) => item.is_cover && item.media_type === 'image') || listing.media.find((item) => item.media_type === 'image')
         return <motion.article key={listing.id} className={`landing-listing${index === 0 ? ' landing-listing--featured' : ''}`} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: .15 }} transition={{ delay: Math.min(index * .045, .2), duration: .42 }}>
-          <button type="button" className="landing-listing__button" onClick={(event) => onOpenListing(listing.id, origin(event.currentTarget))} aria-label={`${t.details}: ${listing.title}`}>
+          <a className="landing-listing__button" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer" aria-label={`${t.details}: ${listing.title}`}>
             <span className="landing-listing__visual">
               {cover ? <img src={mediaUrl(cover.url)} alt="" loading="lazy" decoding="async" /> : <HomePlaceholder />}
               <span className="landing-listing__district">{districtLabel(listing.district, lang)}</span>
@@ -76,7 +75,7 @@ export default function LandingListings({ lang, onExplore, onOpenListing }: Prop
               <span className="landing-listing__address">{listing.address}</span>
               <span className="landing-listing__facts"><span>{listing.rooms} {t.rooms}</span><span>{listing.area_sqm} m²</span><span className="landing-listing__more">{t.details}<Arrow /></span></span>
             </span>
-          </button>
+          </a>
         </motion.article>
       })}
     </div>}

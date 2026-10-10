@@ -53,6 +53,7 @@ export const api = {
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
   updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name'>>) => request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   listings: (params: URLSearchParams) => request<ListingPage>(`/listings?${params}`),
+  listing: (id: string) => request<Listing>(`/listings/${id}`),
   aiSearch: (query: string, lang: Lang) => request<AiSearchResponse>(`/listings/ai-search?q=${encodeURIComponent(query)}&lang=${lang}`),
   voiceSearch: (recording: Blob, lang: Lang) => {
     const extension = recording.type.includes('ogg') ? 'ogg' : recording.type.includes('mp4') ? 'mp4' : 'webm'
@@ -94,4 +95,10 @@ export function mediaUrl(url: string) {
   if (/^https?:\/\//.test(url)) return url
   const root = API_BASE.replace(/\/api\/v1\/?$/, '')
   return `${root}${url}`
+}
+
+export function listingUrl(listingId: string) {
+  const url = new URL(import.meta.env.BASE_URL || '/', window.location.origin)
+  url.searchParams.set('listing', listingId)
+  return url.toString()
 }
