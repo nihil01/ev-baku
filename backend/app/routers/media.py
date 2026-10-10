@@ -1,12 +1,9 @@
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..config import Settings, get_settings
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, optional_auth
 from ..models import Listing, ListingMedia, MediaType
@@ -14,6 +11,37 @@ from ..schemas import MediaRead, Message
 from ..storage import ObjectStorage
 
 router = APIRouter(tags=["media"])
+
+
+def requested_byte_range(value: str | None, total: int) -> tuple[int, int] | None:
+    if not value:
+        return None
+
+    try:
+        unit, byte_range = value.strip().split("=", 1)
+        if unit.lower() != "bytes" or "," in byte_range:
+            raise ValueError
+        start_text, end_text = byte_range.split("-", 1)
+        if not start_text:
+            suffix_length = int(end_text)
+            if suffix_length <= 0:
+                raise ValueError
+            start = max(total - suffix_length, 0)
+            end = total - 1
+        else:
+            start = int(start_text)
+            end = int(end_text) if end_text else total - 1
+            if start < 0 or start >= total or end < start:
+                raise ValueError
+            end = min(end, total - 1)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail="Requested range is not satisfiable",
+            headers={"Content-Range": f"bytes */{total}"},
+        ) from None
+
+    return start, end
 
 
 def get_storage(request: Request) -> ObjectStorage:
@@ -62,22 +90,43 @@ async def upload_media(
 @router.get("/media/{media_id}")
 async def serve_media(
     media_id: str,
+    request: Request,
     auth: AuthContext | None = Depends(optional_auth),
     db: AsyncSession = Depends(get_db),
     storage: ObjectStorage = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
 ):
     media = (await db.execute(
         select(ListingMedia).options(selectinload(ListingMedia.listing)).where(ListingMedia.id == media_id)
     )).scalar_one_or_none()
     if not media or (media.listing.status.value != "published" and (not auth or media.listing.owner_id != auth.user.id)):
         raise HTTPException(status_code=404, detail="Media not found")
-    if settings.storage_backend == "minio":
-        return RedirectResponse(await storage.presigned_url(media.object_key), status_code=307)
-    path = settings.local_storage_path / media.object_key
-    if not path.exists():
+
+    byte_range = requested_byte_range(request.headers.get("range"), media.size_bytes)
+    start, end = byte_range or (0, media.size_bytes - 1)
+    length = end - start + 1
+    try:
+        body = await storage.stream(media.object_key, offset=start, length=length)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Media file missing")
-    return FileResponse(path, media_type=media.content_type, filename=Path(media.original_name).name)
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(length),
+        "Cache-Control": (
+            "public, max-age=86400, immutable"
+            if media.listing.status.value == "published"
+            else "private, no-store"
+        ),
+    }
+    if byte_range:
+        headers["Content-Range"] = f"bytes {start}-{end}/{media.size_bytes}"
+
+    return StreamingResponse(
+        body,
+        status_code=status.HTTP_206_PARTIAL_CONTENT if byte_range else status.HTTP_200_OK,
+        media_type=media.content_type,
+        headers=headers,
+    )
 
 
 @router.delete("/media/{media_id}", response_model=Message)

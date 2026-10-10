@@ -4,7 +4,7 @@ import mimetypes
 import os
 import tempfile
 import uuid
-from datetime import timedelta
+from collections.abc import Iterator
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
@@ -65,24 +65,13 @@ class ObjectStorage:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.client: Minio | None = None
-        self.public_client: Minio | None = None
 
         if settings.storage_backend == "minio":
-            # Backend использует этот клиент для загрузки и удаления.
             self.client = Minio(
                 settings.minio_endpoint,
                 access_key=settings.minio_access_key,
                 secret_key=settings.minio_secret_key,
                 secure=settings.minio_secure,
-                region=settings.minio_region,
-            )
-
-            # Этот клиент только формирует ссылки для браузера.
-            self.public_client = Minio(
-                settings.minio_public_endpoint,
-                access_key=settings.minio_access_key,
-                secret_key=settings.minio_secret_key,
-                secure=settings.minio_public_secure,
                 region=settings.minio_region,
             )
 
@@ -154,13 +143,50 @@ class ObjectStorage:
             if path.exists():
                 await asyncio.to_thread(os.remove, path)
 
-    async def presigned_url(self, object_key: str) -> str:
-        if not self.public_client:
-            return ""
+    async def stream(
+        self,
+        object_key: str,
+        *,
+        offset: int = 0,
+        length: int | None = None,
+    ) -> Iterator[bytes]:
+        """Read an object without exposing the storage endpoint to the browser."""
+        chunk_size = 1024 * 1024
 
-        return await asyncio.to_thread(
-            self.public_client.presigned_get_object,
-            self.settings.minio_bucket,
-            object_key,
-            expires=timedelta(minutes=15),
-        )
+        if self.client:
+            response = await asyncio.to_thread(
+                self.client.get_object,
+                self.settings.minio_bucket,
+                object_key,
+                offset=offset,
+                length=length or 0,
+            )
+
+            def minio_chunks() -> Iterator[bytes]:
+                try:
+                    yield from response.stream(chunk_size)
+                finally:
+                    response.close()
+                    response.release_conn()
+
+            return minio_chunks()
+
+        root = self.settings.local_storage_path.resolve()
+        path = (root / object_key).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise FileNotFoundError(object_key)
+
+        def local_chunks() -> Iterator[bytes]:
+            remaining = length
+            with path.open("rb") as source:
+                source.seek(offset)
+                while remaining is None or remaining > 0:
+                    read_size = chunk_size if remaining is None else min(chunk_size, remaining)
+                    chunk = source.read(read_size)
+                    if not chunk:
+                        break
+                    yield chunk
+                    if remaining is not None:
+                        remaining -= len(chunk)
+
+        return local_chunks()

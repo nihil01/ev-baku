@@ -255,9 +255,19 @@ def test_user_listing_media_publish_flow():
         first_media_id = uploaded.json()["id"]
         watermarked = client.get(f"/api/v1/media/{first_media_id}")
         assert watermarked.status_code == 200
+        assert "location" not in watermarked.headers
+        assert watermarked.headers["accept-ranges"] == "bytes"
         assert watermarked.content != original_photo
         with Image.open(BytesIO(watermarked.content)) as stored_image:
             assert stored_image.size == (640, 420)
+
+        partial_photo = client.get(
+            f"/api/v1/media/{first_media_id}",
+            headers={"Range": "bytes=0-31"},
+        )
+        assert partial_photo.status_code == 206
+        assert partial_photo.headers["content-range"].endswith(f"/{len(watermarked.content)}")
+        assert partial_photo.content == watermarked.content[:32]
 
         published = client.post(f"/api/v1/listings/{listing_id}/publish", headers=headers)
         assert published.status_code == 200, published.text
