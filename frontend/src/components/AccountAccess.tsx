@@ -114,14 +114,26 @@ export default function AccountAccess({ lang, compact = false, onListingsChanged
   }, [authOpen, dashboardOpen, onOverlayChange])
   useEffect(() => () => onOverlayChange?.(false), [onOverlayChange])
 
-  if (loading) return <span className="account-loading" />
+  if (loading) return <span className="account-loading" role="status" aria-label={t.saving} />
   const overlay = <AnimatePresence initial={false}>
     {authOpen && <AuthModal lang={lang} onClose={() => setAuthOpen(false)} login={login} register={register} onSuccess={() => { setAuthOpen(false); setDashboardOpen(true) }} />}
     {dashboardOpen && user && <UiErrorBoundary lang={lang} onClose={() => setDashboardOpen(false)}><Dashboard lang={lang} onClose={() => setDashboardOpen(false)} onLogout={async () => { await logout(); setDashboardOpen(false) }} onListingsChanged={onListingsChanged} /></UiErrorBoundary>}
   </AnimatePresence>
+  const displayName = user?.full_name.trim().split(/\s+/)[0] || t.account
   return <>
-    <button type="button" className={`account-trigger${compact ? ' compact' : ''}`} onClick={() => user ? setDashboardOpen(true) : setAuthOpen(true)}>
-      <span>{user ? user.full_name.slice(0, 1).toUpperCase() : '○'}</span>{compact ? '' : user ? t.account : t.login}
+    <button
+      type="button"
+      className={`account-trigger${compact ? ' compact' : ''}${user ? ' is-authenticated' : ''}`}
+      onClick={() => user ? setDashboardOpen(true) : setAuthOpen(true)}
+      aria-label={user ? `${t.account}: ${user.full_name}` : t.login}
+      aria-haspopup="dialog"
+      aria-expanded={user ? dashboardOpen : authOpen}
+    >
+      <span className="account-trigger__avatar" aria-hidden="true">
+        {user ? user.full_name.slice(0, 1).toUpperCase() : <svg viewBox="0 0 24 24" fill="none"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></svg>}
+      </span>
+      {!compact && <span className="account-trigger__copy"><strong>{user ? displayName : t.login}</strong><small>{t.account}</small></span>}
+      {!compact && <svg className="account-trigger__chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7 8 3 3 3-3" /></svg>}
     </button>
     {createPortal(overlay, document.body)}
   </>

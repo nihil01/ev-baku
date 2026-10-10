@@ -1,7 +1,15 @@
-.account-trigger { min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; border-radius: 999px; color: #173c34; background: #e8ede8; font-size: 9px; font-weight: 800; white-space: nowrap; }
-.account-trigger>span { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #173c34; font-size: 12px; }
-.account-trigger.compact { width: 40px; padding: 4px; }
-.account-loading { width: 38px; height: 38px; display: block; border: 2px solid #d5ddd7; border-top-color: #f07843; border-radius: 50%; animation: account-spin .8s linear infinite; }
+.account-trigger { min-height: 48px; display: inline-flex; align-items: center; gap: 9px; padding: 4px 11px 4px 4px; border: 1px solid rgba(23,60,52,.12); border-radius: 15px; color: #173c34; background: #fffdf6; box-shadow: 0 8px 24px rgba(10,40,32,.12); font-size: 11px; font-weight: 800; white-space: nowrap; touch-action: manipulation; transition: color .18s ease,background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease; }
+.account-trigger:hover { border-color: rgba(23,60,52,.24); background: #fff; box-shadow: 0 12px 28px rgba(10,40,32,.17); transform: translateY(-1px); }
+.account-trigger:active { box-shadow: 0 5px 14px rgba(10,40,32,.14); transform: translateY(0) scale(.98); }
+.account-trigger__avatar { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 11px; color: #fff; background: #173c34; font-size: 13px; font-weight: 850; }
+.account-trigger__avatar svg { width: 19px; height: 19px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.account-trigger__copy { min-width: 0; display: grid; gap: 1px; text-align: left; line-height: 1.05; }
+.account-trigger__copy strong { max-width: 112px; overflow: hidden; font-size: 12px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.account-trigger__copy small { color: #687c73; font-size: 8px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
+.account-trigger__chevron { width: 16px; height: 16px; flex: 0 0 auto; margin-left: 1px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .64; }
+.account-trigger.compact { width: 46px; min-height: 46px; justify-content: center; padding: 3px; border-radius: 14px; }
+.account-trigger.compact .account-trigger__avatar { width: 38px; height: 38px; }
+.account-loading { width: 44px; height: 44px; display: block; border: 2px solid rgba(255,255,255,.26); border-top-color: #f4c95d; border-radius: 50%; animation: account-spin .8s linear infinite; }
 @keyframes account-spin { to { transform: rotate(360deg); } }
 .account-backdrop { position: fixed; z-index: 300; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(12,38,32,.5); backdrop-filter: blur(9px); }
 .account-close { width: 37px; height: 37px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #173c34; font-size: 20px; }
@@ -196,7 +204,7 @@
 @media(prefers-reduced-motion:reduce) { .account-loading,.listing-action-spinner { animation: none; } }
 
 /* Larger, calmer type scale shared by authentication and the owner dashboard. */
-.account-trigger { min-height: 42px; font-size: 11px; }
+.account-trigger { font-size: 11px; }
 .auth-logo { border-radius: 13px; background: transparent; }
 .auth-logo svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2.7; stroke-linecap: round; stroke-linejoin: round; }
 .auth-modal>p { font-size: 10px; }

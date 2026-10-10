@@ -441,7 +441,7 @@
 .layout-switcher button { min-height: 40px; color: #bed0c7; font-size: 11px; }
 .layout-switcher button.active { color: var(--green); background: #fff; }
 .search-header .account-trigger.compact { color: var(--green); background: #fff; }
-.search-header .account-trigger.compact>span { background: var(--orange); }
+.search-header .account-trigger.compact .account-trigger__avatar { background: var(--orange); }
 .search-back { height: 44px; color: #fff; background: rgba(255,255,255,.09); font-size: 11px; }
 .search-back svg { color: var(--green); background: #fff; }
 
