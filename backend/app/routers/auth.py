@@ -6,6 +6,7 @@ from ..config import Settings, get_settings
 from ..database import get_db
 from ..dependencies import AuthContext, csrf_protected, current_auth
 from ..models import Session, User
+from ..rate_limit import enforce_rate_limit, private_identity
 from ..schemas import AuthResponse, Message, UserLogin, UserRead, UserRegister, UserUpdate
 from ..security import (
     clear_auth_cookies,
@@ -19,6 +20,7 @@ from ..security import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+DUMMY_PASSWORD_HASH = hash_password("not-a-real-user-password-9c37d2")
 
 
 async def issue_session(user: User, request: Request, response: Response, db: AsyncSession, settings: Settings) -> AuthResponse:
@@ -48,7 +50,7 @@ async def register(
 ):
     email = payload.email.lower().strip()
     if (await db.execute(select(User.id).where(User.email == email))).scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="An account with this email already exists")
+        raise HTTPException(status_code=409, detail="Unable to create an account with these details")
     user = User(email=email, password_hash=hash_password(payload.password), full_name=payload.full_name.strip(), phone=payload.phone)
     db.add(user)
     await db.flush()
@@ -63,8 +65,18 @@ async def login(
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
-    user = (await db.execute(select(User).where(User.email == payload.email.lower().strip()))).scalar_one_or_none()
-    if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
+    email = payload.email.lower().strip()
+    if settings.rate_limit_enabled:
+        await enforce_rate_limit(
+            request,
+            bucket="login-account",
+            identity=private_identity("login-account", email, settings),
+            limit=settings.rate_limit_login_account_requests,
+            window_seconds=settings.rate_limit_login_account_window_seconds,
+        )
+    user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    password_valid = verify_password(payload.password, user.password_hash if user else DUMMY_PASSWORD_HASH)
+    if not user or not password_valid or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     return await issue_session(user, request, response, db, settings)
 

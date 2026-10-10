@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { api, listingUrl, mediaUrl } from '../lib/api'
+import { formatAzPhone, isValidAzPhone, isValidEmail, normalizeAzPhone } from '../lib/validation'
 import { districtCenter, districtLabel, districts } from '../data/mapConfig'
 import { useAuth } from '../context/AuthContext'
 import HouseLogo from './HouseLogo'
@@ -47,6 +48,24 @@ const extra = {
 } as const
 
 const currencySymbol: Record<Currency, string> = { AZN: '₼', USD: '$', EUR: '€', RUB: '₽' }
+
+const validationCopy = {
+  az: {
+    invalidEmail: 'Düzgün e-poçt ünvanı daxil edin, məsələn name@example.com.',
+    invalidPhone: 'Azərbaycan mobil nömrəsini tam daxil edin: +994 50 123 45 67.',
+    phoneHint: 'Mobil kodlar: 10, 50, 51, 55, 60, 70, 77 və 99.',
+  },
+  en: {
+    invalidEmail: 'Enter a valid email address, for example name@example.com.',
+    invalidPhone: 'Enter a complete Azerbaijani mobile number: +994 50 123 45 67.',
+    phoneHint: 'Mobile codes: 10, 50, 51, 55, 60, 70, 77 and 99.',
+  },
+  ru: {
+    invalidEmail: 'Введите корректный email, например name@example.com.',
+    invalidPhone: 'Введите полный мобильный номер Азербайджана: +994 50 123 45 67.',
+    phoneHint: 'Мобильные коды: 10, 50, 51, 55, 60, 70, 77 и 99.',
+  },
+} as const
 
 const text = {
   az: {
@@ -157,20 +176,68 @@ export default function AccountAccess({ lang, compact = false, onListingsChanged
   </>
 }
 
+function AzerbaijaniPhoneField({ label, value, onChange, invalidMessage, hint, required = false, forceInvalid = false }: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  invalidMessage: string
+  hint: string
+  required?: boolean
+  forceInvalid?: boolean
+}) {
+  const inputId = useId()
+  const helpId = `${inputId}-help`
+  const errorId = `${inputId}-error`
+  const [touched, setTouched] = useState(false)
+  const invalid = forceInvalid || ((touched || value.length >= 13) && ((required && !value) || (!!value && !isValidAzPhone(value))))
+
+  return <label className="phone-field" htmlFor={inputId}>
+    {label}
+    <input
+      id={inputId}
+      name="phone"
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
+      required={required}
+      maxLength={17}
+      value={formatAzPhone(value)}
+      aria-invalid={invalid}
+      aria-describedby={invalid ? errorId : helpId}
+      onBlur={() => setTouched(true)}
+      onChange={(event) => onChange(normalizeAzPhone(event.target.value))}
+    />
+    {invalid
+      ? <small id={errorId} className="field-error" role="alert">{invalidMessage}</small>
+      : <small id={helpId} className="field-hint">{hint}</small>}
+  </label>
+}
+
 function AuthModal({ lang, onClose, login, register, onSuccess }: {
   lang: Lang; onClose: () => void; login: (email: string, password: string) => Promise<void>;
   register: (payload: { email: string; password: string; full_name: string; phone?: string }) => Promise<void>; onSuccess: () => void
 }) {
   const t = text[lang]
+  const validation = validationCopy[lang]
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [phoneInvalid, setPhoneInvalid] = useState(false)
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setBusy(true); setError('')
+    event.preventDefault(); setError('')
+    const cleanEmail = email.trim().toLowerCase()
+    setEmailTouched(true)
+    const hasInvalidPhone = mode === 'register' && !!phone && !isValidAzPhone(phone)
+    setPhoneInvalid(hasInvalidPhone)
+    if (!isValidEmail(cleanEmail) || hasInvalidPhone) return
+    setBusy(true)
     const data = new FormData(event.currentTarget)
     try {
-      if (mode === 'login') await login(String(data.get('email')), String(data.get('password')))
-      else await register({ email: String(data.get('email')), password: String(data.get('password')), full_name: String(data.get('full_name')), phone: String(data.get('phone') || '') })
+      if (mode === 'login') await login(cleanEmail, String(data.get('password')))
+      else await register({ email: cleanEmail, password: String(data.get('password')), full_name: String(data.get('full_name')), phone })
       onSuccess()
     } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
   }
@@ -179,12 +246,12 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
       <button type="button" className="account-close" onClick={onClose} aria-label={t.close}>×</button>
       <HouseLogo className="auth-logo" /><p>BAKU · RENTAL ACCOUNT</p><h2>{mode === 'login' ? t.signin : t.signup}</h2>
       <form onSubmit={submit}>
-        {mode === 'register' && <><label>{t.name}<input name="full_name" required minLength={2} autoComplete="name" /></label><label>{t.phone}<input name="phone" autoComplete="tel" /></label></>}
-        <label>{t.email}<input name="email" type="email" required autoComplete="email" /></label>
+        {mode === 'register' && <><label>{t.name}<input name="full_name" required minLength={2} autoComplete="name" /></label><AzerbaijaniPhoneField label={t.phone} value={phone} onChange={(value) => { setPhone(value); setPhoneInvalid(false) }} invalidMessage={validation.invalidPhone} hint={validation.phoneHint} forceInvalid={phoneInvalid} /></>}
+        <label>{t.email}<input name="email" type="email" required autoComplete="email" value={email} aria-invalid={emailTouched && !isValidEmail(email)} aria-describedby={emailTouched && !isValidEmail(email) ? 'auth-email-error' : undefined} onBlur={() => setEmailTouched(true)} onChange={(event) => setEmail(event.target.value)} />{emailTouched && !isValidEmail(email) && <small id="auth-email-error" className="field-error" role="alert">{validation.invalidEmail}</small>}</label>
         <label>{t.password}<input name="password" type="password" required minLength={mode === 'register' ? 10 : 1} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
         <button type="submit" disabled={busy}>{busy ? t.saving : mode === 'login' ? t.login : t.signup}</button>
       </form>
-      <button type="button" className="auth-mode" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>{mode === 'login' ? `${t.noAccount} ${t.signup}` : `${t.hasAccount} ${t.login}`}</button>
+      <button type="button" className="auth-mode" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setEmailTouched(false); setPhoneInvalid(false) }}>{mode === 'login' ? `${t.noAccount} ${t.signup}` : `${t.hasAccount} ${t.login}`}</button>
     </motion.section>
   </motion.div></>
 }
@@ -193,6 +260,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const { user, updateProfile } = useAuth()
   const t = text[lang]
   const x = extra[lang]
+  const validation = validationCopy[lang]
   const mediaText = mediaEditorCopy[lang]
   const propertyCosts = propertyCostsCopy[lang]
   const [tab, setTab] = useState<DashboardTab>('list')
@@ -218,6 +286,8 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const [chatSending, setChatSending] = useState(false)
   const [rates, setRates] = useState<Record<Currency, number> | null>(null)
   const [profile, setProfile] = useState({ full_name: user?.full_name || '', phone: user?.phone || '', telegram: user?.telegram || '', whatsapp: user?.whatsapp || '', show_full_name: user?.show_full_name ?? true })
+  const [profilePhoneInvalid, setProfilePhoneInvalid] = useState(false)
+  const [listingPhoneInvalid, setListingPhoneInvalid] = useState(false)
 
   useEffect(() => { api.myListings().then(setListings).catch((err) => setError(err.message)) }, [refresh])
   useEffect(() => { api.exchangeRates().then((data) => setRates(data.rates)).catch(() => setRates(null)) }, [])
@@ -266,11 +336,11 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const clearUploads = () => { setPhotos([]); setPlans([]); setVideos([]) }
   const startCreate = () => {
     setEditing(null); setExistingMedia([]); clearUploads(); setPublishNow(true)
-    setForm(freshListing()); setMessage(''); setError(''); setTab('new')
+    setForm(freshListing()); setListingPhoneInvalid(false); setMessage(''); setError(''); setTab('new')
   }
   const startEdit = (listing: Listing) => {
     setEditing(listing); setExistingMedia(listing.media); clearUploads(); setPublishNow(false)
-    setForm(listingPayload(listing)); setMessage(''); setError(''); setTab('edit')
+    setForm(listingPayload(listing)); setListingPhoneInvalid(false); setMessage(''); setError(''); setTab('edit')
   }
   const finishForm = () => {
     setEditing(null); setExistingMedia([]); clearUploads(); setForm(freshListing()); setTab('list')
@@ -294,7 +364,12 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
     }
   }
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError(''); setMessage('')
+    event.preventDefault(); setError(''); setMessage('')
+    const phoneRequired = form.contact_method !== 'messages'
+    const hasInvalidPhone = (phoneRequired && !form.contact_phone) || (!!form.contact_phone && !isValidAzPhone(form.contact_phone))
+    setListingPhoneInvalid(hasInvalidPhone)
+    if (hasInvalidPhone) return
+    setBusy(true)
     try {
       const hasPhoto = existingMedia.some((item) => item.media_type === 'image') || photos.length > 0
       if (((!editing && publishNow) || editing?.status === 'published') && !hasPhoto) throw new Error(t.atLeastPhoto)
@@ -347,7 +422,11 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
     } catch (err) { setError(err instanceof Error ? err.message : t.error) }
   }
   const saveProfile = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('')
+    event.preventDefault(); setError('')
+    const hasInvalidPhone = !!profile.phone && !isValidAzPhone(profile.phone)
+    setProfilePhoneInvalid(hasInvalidPhone)
+    if (hasInvalidPhone) return
+    setBusy(true)
     try { await updateProfile(profile); setMessage(x.profileSaved) } catch (err) { setError(err instanceof Error ? err.message : t.error) } finally { setBusy(false) }
   }
   const sendChat = async (event: FormEvent<HTMLFormElement>) => {
@@ -385,7 +464,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           <span className="chat-property-copy"><small>{x.listingContext}</small><b>{activeChat.listing_title}</b><span>{activeChat.listing_address} · {districtLabel(activeChat.listing_district, lang)}</span></span>
           <strong>{Number(activeChat.listing_monthly_rent).toLocaleString()} {currencySymbol[activeChat.listing_rent_currency]}<small>{activeChat.listing_status === 'published' ? x.openListing : x.unavailableListing}</small></strong>
         </a><div className="chat-messages">{chatMessages.map((item) => <div key={item.id} className={item.sender_id === user?.id ? 'mine' : ''}>{item.body}<small>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></div>)}</div><form onSubmit={sendChat}><input name="body" required maxLength={2000} placeholder={x.messagePlaceholder} aria-label={x.messagePlaceholder} disabled={chatSending} /><button type="submit" disabled={chatSending} aria-busy={chatSending}>{chatSending ? x.sending : x.send}</button></form></> : <div className="dashboard-empty">{x.chooseChat}</div>}</section></div> : tab === 'profile' ?
-        <form className="profile-form" onSubmit={saveProfile}><h3>{x.profile}</h3><label>{t.name}<input required value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></label><label>{t.phone}<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>{x.telegram}<input placeholder="@username" value={profile.telegram} onChange={(event) => setProfile({ ...profile, telegram: event.target.value })} /></label><label>{x.whatsapp}<input value={profile.whatsapp} onChange={(event) => setProfile({ ...profile, whatsapp: event.target.value })} /></label><label className="profile-check"><input type="checkbox" checked={profile.show_full_name} onChange={(event) => setProfile({ ...profile, show_full_name: event.target.checked })} />{x.showName}</label><button type="submit" disabled={busy}>{busy ? t.saving : t.saveChanges}</button></form> :
+        <form className="profile-form" onSubmit={saveProfile}><h3>{x.profile}</h3><label>{t.name}<input required value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></label><AzerbaijaniPhoneField label={t.phone} value={profile.phone} onChange={(value) => { setProfile({ ...profile, phone: value }); setProfilePhoneInvalid(false) }} invalidMessage={validation.invalidPhone} hint={validation.phoneHint} forceInvalid={profilePhoneInvalid} /><label>{x.telegram}<input placeholder="@username" value={profile.telegram} onChange={(event) => setProfile({ ...profile, telegram: event.target.value })} /></label><label>{x.whatsapp}<input value={profile.whatsapp} onChange={(event) => setProfile({ ...profile, whatsapp: event.target.value })} /></label><label className="profile-check"><input type="checkbox" checked={profile.show_full_name} onChange={(event) => setProfile({ ...profile, show_full_name: event.target.checked })} />{x.showName}</label><button type="submit" disabled={busy}>{busy ? t.saving : t.saveChanges}</button></form> :
         <form className="listing-form" onSubmit={submit}>
           {editing && <div className="editing-banner"><div><strong>{t.editing}</strong><span>{editing.status === 'published' ? t.publishedHint : statuses[editing.status]}</span></div><button type="button" onClick={finishForm}>{t.cancel}</button></div>}
           <section><h3>{t.details}</h3><div className="form-grid">
@@ -464,7 +543,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           </section>
           <section className="contact-settings"><h3>{t.contact}</h3><p>{x.contactHint}</p><div className="contact-methods">{([
             ['phone', x.phoneOnly, x.phoneOnlyHint], ['messages', x.messagesOnly, x.messagesOnlyHint], ['both', x.both, x.bothHint],
-          ] as [ContactMethod, string, string][]).map(([value, label, hint]) => <label key={value} className={form.contact_method === value ? 'active' : ''}><input type="radio" name="contact_method" value={value} checked={form.contact_method === value} onChange={() => field('contact_method', value)} /><span><b>{label}</b><small>{hint}</small></span><i>✓</i></label>)}</div><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required={form.contact_method !== 'messages'} value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={(event) => setBooleanField('show_contact_name', event.currentTarget.checked)} />{x.showName}</label></div></section>
+          ] as [ContactMethod, string, string][]).map(([value, label, hint]) => <label key={value} className={form.contact_method === value ? 'active' : ''}><input type="radio" name="contact_method" value={value} checked={form.contact_method === value} onChange={() => { field('contact_method', value); setListingPhoneInvalid(false) }} /><span><b>{label}</b><small>{hint}</small></span><i>✓</i></label>)}</div><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><AzerbaijaniPhoneField label={t.phone} value={form.contact_phone} onChange={(value) => { field('contact_phone', value); setListingPhoneInvalid(false) }} invalidMessage={validation.invalidPhone} hint={validation.phoneHint} required={form.contact_method !== 'messages'} forceInvalid={listingPhoneInvalid} /><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={(event) => setBooleanField('show_contact_name', event.currentTarget.checked)} />{x.showName}</label></div></section>
           <div className="form-submit">{(!editing || editing.status !== 'published') && <label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label>}<button type="submit" disabled={busy}>{busy ? t.saving : editing ? t.saveChanges : publishNow ? t.createPublish : t.saveDraft}</button></div>
         </form>}
       </main>

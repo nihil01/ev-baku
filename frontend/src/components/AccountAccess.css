@@ -23,6 +23,11 @@
 .auth-modal form label,.listing-form label { display: flex; flex-direction: column; gap: 7px; color: #677a73; font-size: 8px; font-weight: 700; }
 .auth-modal input,.listing-form input,.listing-form textarea,.listing-form select { width: 100%; min-height: 43px; padding: 10px 12px; border: 1px solid #d7dfd8; border-radius: 9px; outline: none; color: #173c34; background: #fff; font: inherit; font-size: 10px; }
 .auth-modal input:focus,.listing-form input:focus,.listing-form textarea:focus,.listing-form select:focus { border-color: #6e9b89; box-shadow: 0 0 0 3px #4b8c7018; }
+.auth-modal input[aria-invalid="true"],.listing-form input[aria-invalid="true"],.profile-form input[aria-invalid="true"] { border-color: #c4553f; box-shadow: 0 0 0 3px rgba(196,85,63,.11); }
+.field-hint,.field-error { display: block; font-size: 9px; font-weight: 600; line-height: 1.4; }
+.field-hint { color: #82918a; }
+.field-error { color: #a83f2d; }
+.phone-field input { letter-spacing: .035em; font-variant-numeric: tabular-nums; }
 .auth-modal form>button { min-height: 47px; margin-top: 5px; border-radius: 10px; color: #fff; background: #173c34; font-size: 10px; font-weight: 800; }
 .auth-modal form>button:disabled,.listing-form button:disabled { opacity: .55; cursor: wait; }
 .auth-mode { width: 100%; margin-top: 18px; padding: 0; color: #657970; background: transparent; font-size: 9px; }
@@ -217,6 +222,7 @@
   .dashboard-list article { grid-template-columns: 105px 1fr; }
   .dashboard-list article>img,.dashboard-listing-image,.dashboard-placeholder { width: 105px; }
   .form-grid,.check-grid,.media-inputs,.existing-media__grid,.property-choice-grid,.property-choice-grid.parking-choices { grid-template-columns: 1fr; }
+  .auth-modal input[type="email"],.auth-modal input[type="tel"],.listing-form input[type="tel"],.profile-form input[type="tel"] { font-size: 16px; }
   .service-fee-input { grid-template-columns: 1fr; }
   .service-fee-input>small { padding-bottom: 0; }
   .listing-form>section { padding: 15px; }

@@ -16,12 +16,36 @@ from .models import (
     UserRole,
 )
 
+AZERBAIJANI_MOBILE_PREFIXES = {"10", "50", "51", "55", "60", "70", "77", "99"}
+
+
+def normalize_azerbaijani_mobile(value: str | None, *, empty_value: str | None = None) -> str | None:
+    if value is None:
+        return None
+    digits = "".join(character for character in value if character in "0123456789")
+    if not digits:
+        return empty_value
+    if digits.startswith("00994"):
+        digits = digits[5:]
+    elif digits.startswith("994"):
+        digits = digits[3:]
+    elif digits.startswith("0"):
+        digits = digits[1:]
+    if len(digits) != 9 or digits[:2] not in AZERBAIJANI_MOBILE_PREFIXES:
+        raise ValueError("Enter a valid Azerbaijani mobile number, for example +994 50 123 45 67")
+    return f"+994{digits}"
+
 
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
     full_name: str = Field(min_length=2, max_length=120)
     phone: str | None = Field(default=None, max_length=32)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None):
+        return normalize_azerbaijani_mobile(value)
 
     @field_validator("password")
     @classmethod
@@ -61,6 +85,11 @@ class UserUpdate(BaseModel):
     telegram: str | None = Field(default=None, max_length=64)
     whatsapp: str | None = Field(default=None, max_length=64)
     show_full_name: bool | None = None
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None):
+        return normalize_azerbaijani_mobile(value)
 
 
 class DiscountTier(BaseModel):
@@ -111,6 +140,11 @@ class ListingBase(BaseModel):
     show_contact_name: bool = True
     contact_telegram: str | None = Field(default=None, max_length=64)
     contact_whatsapp: str | None = Field(default=None, max_length=64)
+
+    @field_validator("contact_phone", mode="before")
+    @classmethod
+    def validate_contact_phone(cls, value: str | None):
+        return normalize_azerbaijani_mobile(value, empty_value="")
 
     @field_serializer(
         "latitude",
@@ -194,6 +228,11 @@ class ListingUpdate(BaseModel):
     show_contact_name: bool | None = None
     contact_telegram: str | None = Field(default=None, max_length=64)
     contact_whatsapp: str | None = Field(default=None, max_length=64)
+
+    @field_validator("contact_phone", mode="before")
+    @classmethod
+    def validate_contact_phone(cls, value: str | None):
+        return normalize_azerbaijani_mobile(value, empty_value="")
 
     @field_validator("discount_tiers")
     @classmethod

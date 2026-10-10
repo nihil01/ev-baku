@@ -66,6 +66,20 @@ class Settings(BaseSettings):
     guest_ai_request_limit: int = Field(ge=1, le=100)
     max_voice_mb: int = Field(ge=1, le=25)
 
+    rate_limit_enabled: bool = True
+    rate_limit_default_requests: int = Field(default=180, ge=10, le=100_000)
+    rate_limit_default_window_seconds: int = Field(default=60, ge=1, le=3600)
+    rate_limit_auth_requests: int = Field(default=10, ge=1, le=1000)
+    rate_limit_auth_window_seconds: int = Field(default=300, ge=1, le=86_400)
+    rate_limit_login_account_requests: int = Field(default=8, ge=1, le=1000)
+    rate_limit_login_account_window_seconds: int = Field(default=900, ge=1, le=86_400)
+    rate_limit_register_requests: int = Field(default=5, ge=1, le=1000)
+    rate_limit_register_window_seconds: int = Field(default=3600, ge=1, le=86_400)
+    rate_limit_write_requests: int = Field(default=60, ge=1, le=10_000)
+    rate_limit_write_window_seconds: int = Field(default=60, ge=1, le=3600)
+    rate_limit_expensive_requests: int = Field(default=30, ge=1, le=10_000)
+    rate_limit_expensive_window_seconds: int = Field(default=60, ge=1, le=3600)
+
     @classmethod
     def settings_customise_sources(
             cls,

@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 from io import BytesIO
@@ -50,14 +51,19 @@ TEST_ENV = {
 for key, value in TEST_ENV.items():
     os.environ.setdefault(key, value)
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image, ImageChops
+from pydantic import ValidationError
 
 from app.external import PLACE_CATEGORIES
 from app.main import app
 from app.models import District
+from app.rate_limit import SlidingWindowRateLimiter
+from app.schemas import UserRegister
 from app.speech import TranscriptionError
-from app.storage import add_watermark
+from app.storage import add_watermark, validate_video_signature
 
 LISTING = {
     "title": "Bright apartment near the city center",
@@ -96,6 +102,54 @@ LISTING = {
     "contact_name": "Test Owner",
     "contact_phone": "+994501112233",
 }
+
+
+def test_identity_fields_are_normalized_and_reject_invalid_values():
+    user = UserRegister(
+        email="person@example.com",
+        password="securepass123",
+        full_name="Test Person",
+        phone="050 123 45 67",
+    )
+    assert user.email == "person@example.com"
+    assert user.phone == "+994501234567"
+
+    with pytest.raises(ValidationError):
+        UserRegister(email="burada", password="securepass123", full_name="Test Person")
+    with pytest.raises(ValidationError):
+        UserRegister(
+            email="person@example.com",
+            password="securepass123",
+            full_name="Test Person",
+            phone="+994 12 123 45 67",
+        )
+
+
+def test_sliding_window_rate_limiter_blocks_over_limit():
+    async def exercise():
+        limiter = SlidingWindowRateLimiter()
+        assert (await limiter.consume("test", 2, 60)).allowed
+        assert (await limiter.consume("test", 2, 60)).allowed
+        blocked = await limiter.consume("test", 2, 60)
+        assert not blocked.allowed
+        assert blocked.retry_after >= 1
+
+    asyncio.run(exercise())
+
+
+def test_security_headers_and_trusted_hosts():
+    with TestClient(app) as client:
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["x-frame-options"] == "DENY"
+        assert client.get("/health", headers={"Host": "attacker.example"}).status_code == 400
+
+
+def test_video_content_must_match_declared_type():
+    with pytest.raises(HTTPException) as raised:
+        validate_video_signature(BytesIO(b"not-an-mp4"), "video/mp4")
+    assert raised.value.status_code == 422
 
 
 def test_all_baku_districts_are_supported():

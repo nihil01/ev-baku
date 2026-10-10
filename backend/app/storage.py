@@ -25,6 +25,17 @@ IMAGE_FORMATS = {
 }
 
 
+def validate_video_signature(stream, content_type: str) -> None:
+    """Reject an arbitrary file whose client-provided MIME type says video."""
+    stream.seek(0)
+    header = stream.read(16)
+    stream.seek(0)
+    is_webm = content_type == "video/webm" and header.startswith(b"\x1aE\xdf\xa3")
+    is_iso_media = content_type in {"video/mp4", "video/quicktime"} and len(header) >= 12 and header[4:8] == b"ftyp"
+    if not (is_webm or is_iso_media):
+        raise HTTPException(status_code=422, detail="Invalid or damaged video")
+
+
 def add_watermark(source: bytes, content_type: str) -> bytes:
     """Bake a small, translucent brand mark into an uploaded image."""
     try:
@@ -111,7 +122,9 @@ class ObjectStorage:
             if size == 0:
                 raise HTTPException(status_code=422, detail="Empty file")
             stream.seek(0)
-            if media_type != MediaType.video:
+            if media_type == MediaType.video:
+                validate_video_signature(stream, content_type)
+            else:
                 watermarked = await asyncio.to_thread(add_watermark, stream.read(), content_type)
                 size = len(watermarked)
                 stream.seek(0)

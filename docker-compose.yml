@@ -20,15 +20,29 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       API_PREFIX: ${API_PREFIX:-/api/v1}
       DATABASE_URL: sqlite+aiosqlite:////app/data/ev.db
-      SECRET_KEY: ${SECRET_KEY:-dev-only-change-this-secret-before-production-000000}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in the production environment}
 
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,api}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-ev_session}
       CSRF_COOKIE_NAME: ${CSRF_COOKIE_NAME:-ev_csrf}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-14}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-null}
+
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT_REQUESTS: ${RATE_LIMIT_DEFAULT_REQUESTS:-180}
+      RATE_LIMIT_DEFAULT_WINDOW_SECONDS: ${RATE_LIMIT_DEFAULT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_AUTH_REQUESTS: ${RATE_LIMIT_AUTH_REQUESTS:-10}
+      RATE_LIMIT_AUTH_WINDOW_SECONDS: ${RATE_LIMIT_AUTH_WINDOW_SECONDS:-300}
+      RATE_LIMIT_LOGIN_ACCOUNT_REQUESTS: ${RATE_LIMIT_LOGIN_ACCOUNT_REQUESTS:-8}
+      RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS: ${RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS:-900}
+      RATE_LIMIT_REGISTER_REQUESTS: ${RATE_LIMIT_REGISTER_REQUESTS:-5}
+      RATE_LIMIT_REGISTER_WINDOW_SECONDS: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:-3600}
+      RATE_LIMIT_WRITE_REQUESTS: ${RATE_LIMIT_WRITE_REQUESTS:-60}
+      RATE_LIMIT_WRITE_WINDOW_SECONDS: ${RATE_LIMIT_WRITE_WINDOW_SECONDS:-60}
+      RATE_LIMIT_EXPENSIVE_REQUESTS: ${RATE_LIMIT_EXPENSIVE_REQUESTS:-30}
+      RATE_LIMIT_EXPENSIVE_WINDOW_SECONDS: ${RATE_LIMIT_EXPENSIVE_WINDOW_SECONDS:-60}
 
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/app/data/uploads}
       LANDING_VIDEO_PATH: ${LANDING_VIDEO_PATH:-/app/landing-videos}
@@ -68,7 +82,7 @@ services:
       - api_data:/app/data
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
     depends_on:
       - garage
@@ -100,9 +114,8 @@ services:
       - garage_data:/var/lib/garage/data
 
     ports:
-      # Внешне оставляем привычный порт 9000,
-      # внутри Garage слушает 3900.
-      - "9000:3900"
+      # Для диагностики доступен только с самого сервера.
+      - "127.0.0.1:9000:3900"
 
   postgres:
     image: postgres:17-alpine
@@ -115,7 +128,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
 volumes:
   api_data:
