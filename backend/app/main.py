@@ -11,6 +11,7 @@ from .config import get_settings
 from .database import create_schema
 from .external import ExchangeRateService, GeoapifyService
 from .routers import auth, external, listings, media, social
+from .speech import TranscriptionService
 from .storage import ObjectStorage
 
 settings = get_settings()
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     app.state.geoapify = GeoapifyService(settings)
     app.state.exchange_rates = ExchangeRateService(settings)
     app.state.embeddings = EmbeddingService(settings)
+    app.state.transcription = TranscriptionService(settings)
     yield
 
 
@@ -94,7 +96,7 @@ async def request_guards(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=(self)"
     return response
 
 

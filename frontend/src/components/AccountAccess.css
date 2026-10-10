@@ -79,10 +79,16 @@
 .address-autocomplete__menu small,.address-autocomplete__loading { color: #72847c; font-size: 8px; }
 .address-autocomplete__loading { display: block; padding: 8px 10px; }
 .check-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
-.check-grid label,.form-submit label { min-height: 39px; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #dfe5df; border-radius: 9px; color: #52685f; background: #f8faf7; cursor: pointer; }
-.check-grid input,.form-submit input { position: absolute; width: 1px; min-height: 1px; opacity: 0; }
-.check-grid span,.form-submit label span { width: 17px; height: 17px; border: 1px solid #afbeb6; border-radius: 5px; background: #fff; }
-.check-grid input:checked+span,.form-submit input:checked+span { border-color: #173c34; background: #173c34; box-shadow: inset 0 0 0 4px #fff; }
+.check-grid button { min-height: 46px; display: flex; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid #dfe5df; border-radius: 9px; color: #52685f; background: #f8faf7; font: inherit; font-size: 11px; font-weight: 700; text-align: left; transition: color .16s,background .16s,border-color .16s,box-shadow .16s; }
+.check-grid button:hover { border-color: #9eb5a9; background: #f2f7f3; }
+.check-grid button:focus-visible { outline: 3px solid rgba(75,140,112,.2); outline-offset: 2px; }
+.check-grid button.active { color: #173c34; border-color: #4b8c70; background: #eaf4ed; box-shadow: inset 0 0 0 1px #4b8c70; }
+.check-grid button>span,.form-submit label span { position: relative; width: 18px; height: 18px; flex: 0 0 auto; border: 1px solid #afbeb6; border-radius: 5px; background: #fff; }
+.check-grid button.active>span { border-color: #173c34; background: #173c34; }
+.check-grid button.active>span::after { content: ''; position: absolute; width: 7px; height: 4px; left: 4px; top: 4px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.form-submit label { min-height: 39px; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #dfe5df; border-radius: 9px; color: #52685f; background: #f8faf7; cursor: pointer; }
+.form-submit input { position: absolute; width: 1px; min-height: 1px; opacity: 0; }
+.form-submit input:checked+span { border-color: #173c34; background: #173c34; box-shadow: inset 0 0 0 4px #fff; }
 .media-inputs { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .media-editor__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .media-editor__heading h3 { margin-bottom: 5px; }

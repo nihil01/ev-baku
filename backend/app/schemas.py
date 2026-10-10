@@ -241,6 +241,8 @@ class AiSearchResponse(BaseModel):
     total: int
     query: str
     mode: Literal["semantic", "text"]
+    guest_requests_remaining: int | None = None
+    guest_request_limit: int | None = None
 
 
 class Message(BaseModel):

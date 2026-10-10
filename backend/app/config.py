@@ -60,7 +60,11 @@ class Settings(BaseSettings):
     openai_api_key: str | None
     openai_base_url: str
     openai_embedding_model: str
+    openai_transcription_model: str
     openai_timeout_seconds: float
+
+    guest_ai_request_limit: int = Field(ge=1, le=100)
+    max_voice_mb: int = Field(ge=1, le=25)
 
     @classmethod
     def settings_customise_sources(
@@ -71,7 +75,7 @@ class Settings(BaseSettings):
             dotenv_settings: PydanticBaseSettingsSource,
             file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (dotenv_settings,)
+        return (env_settings, dotenv_settings)
 
     @property
     def allowed_origins(self) -> list[str]:

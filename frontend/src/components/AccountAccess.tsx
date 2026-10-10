@@ -27,6 +27,17 @@ import './AccountAccess.css'
 
 type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void; onOverlayChange?: (open: boolean) => void }
 type DashboardTab = 'list' | 'new' | 'edit' | 'favorites' | 'chat' | 'profile'
+type ListingBooleanField =
+  | 'furnished'
+  | 'has_elevator'
+  | 'has_balcony'
+  | 'has_parking'
+  | 'has_air_conditioning'
+  | 'has_heating'
+  | 'pets_allowed'
+  | 'smoking_allowed'
+  | 'utilities_included'
+  | 'show_contact_name'
 
 const extra = {
   az: { favorites: 'Seçilmişlər', chat: 'Çat', profile: 'Əlaqələr', telegram: 'Telegram', whatsapp: 'WhatsApp / username', showName: 'Ad və soyadı göstər', currency: 'Valyuta', aznEquivalent: 'AZN ekvivalenti', saved: 'Yadda saxlanıldı', send: 'Göndər', noChats: 'Hələ mesaj yoxdur', chooseChat: 'Söhbəti seçin', profileSaved: 'Profil yadda saxlanıldı', discounts: 'Müddətə görə endirim', discountHint: 'İstəyə bağlıdır. Uzunmüddətli kirayə üçün aylıq endirimi təyin edin.', addDiscount: 'Endirim əlavə et', fromMonths: 'Bu aydan', percent: 'Endirim, %', monthlyTotal: 'Aylıq qiymət', removeTier: 'Sil', contactMethod: 'Əlaqə üsulu', contactHint: 'Məxfilik üçün nömrənizi gizlədə və yalnız sayt mesajlarını seçə bilərsiniz.', phoneOnly: 'Yalnız nömrə', phoneOnlyHint: 'Telefon, Telegram və WhatsApp', messagesOnly: 'Yalnız şəxsi mesajlar', messagesOnlyHint: 'Nömrə saytda göstərilmir', both: 'Hər iki üsul', bothHint: 'Birbaşa əlaqə və sayt çatı', savingListing: 'Elan yadda saxlanılır…', watermarking: 'Fotolara zərif EV BAKU nişanı əlavə olunur', publishing: 'Dərc olunur…', archiving: 'Arxivlənir…' },
@@ -186,7 +197,9 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const statuses = useMemo(() => ({ draft: t.draft, published: t.published, archived: t.archived }), [t])
 
   const field = (name: keyof ListingPayload, value: unknown) => setForm((current) => ({ ...current, [name]: value }))
-  const toggle = (name: keyof ListingPayload) => setForm((current) => ({ ...current, [name]: !Boolean(current[name]) }))
+  const setBooleanField = (name: ListingBooleanField, checked: boolean) => {
+    setForm((current) => current[name] === checked ? current : { ...current, [name]: checked })
+  }
   const changeDistrict = (value: DistrictId) => {
     const [longitude, latitude] = districtCenter(value)
     setForm((current) => ({ ...current, district: value, longitude, latitude }))
@@ -360,7 +373,16 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           <section><h3>{t.coordinates}</h3><LocationPicker lang={lang} latitude={Number(form.latitude)} longitude={Number(form.longitude)} onChange={changeLocation} /></section>
           <section><h3>{t.amenities}</h3><div className="check-grid">{([
             ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_parking', t.parking], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
-          ] as [keyof ListingPayload, string][]).map(([name, label]) => <label key={name}><input type="checkbox" checked={Boolean(form[name])} onChange={() => toggle(name)} /><span />{label}</label>)}</div></section>
+          ] as [ListingBooleanField, string][]).map(([name, label]) => {
+            const selected = form[name]
+            return <button
+              type="button"
+              key={name}
+              className={selected ? 'active' : ''}
+              aria-pressed={selected}
+              onClick={() => setBooleanField(name, !selected)}
+            ><span aria-hidden="true" />{label}</button>
+          })}</div></section>
           <section className="media-editor">
             <header className="media-editor__heading"><div><h3>{mediaText.title}</h3><p>{editing ? mediaText.editHint : mediaText.createHint}</p></div>{editing && <strong>{existingMedia.length}</strong>}</header>
             {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}
@@ -377,7 +399,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           </section>
           <section className="contact-settings"><h3>{t.contact}</h3><p>{x.contactHint}</p><div className="contact-methods">{([
             ['phone', x.phoneOnly, x.phoneOnlyHint], ['messages', x.messagesOnly, x.messagesOnlyHint], ['both', x.both, x.bothHint],
-          ] as [ContactMethod, string, string][]).map(([value, label, hint]) => <label key={value} className={form.contact_method === value ? 'active' : ''}><input type="radio" name="contact_method" value={value} checked={form.contact_method === value} onChange={() => field('contact_method', value)} /><span><b>{label}</b><small>{hint}</small></span><i>✓</i></label>)}</div><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required={form.contact_method !== 'messages'} value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={() => toggle('show_contact_name')} />{x.showName}</label></div></section>
+          ] as [ContactMethod, string, string][]).map(([value, label, hint]) => <label key={value} className={form.contact_method === value ? 'active' : ''}><input type="radio" name="contact_method" value={value} checked={form.contact_method === value} onChange={() => field('contact_method', value)} /><span><b>{label}</b><small>{hint}</small></span><i>✓</i></label>)}</div><div className="form-grid"><label>{t.name}<input required value={form.contact_name} onChange={(e) => field('contact_name', e.target.value)} /></label><label>{t.phone}<input required={form.contact_method !== 'messages'} value={form.contact_phone} onChange={(e) => field('contact_phone', e.target.value)} /></label><label>{x.telegram}<input placeholder="@username" value={form.contact_telegram || ''} onChange={(e) => field('contact_telegram', e.target.value || null)} /></label><label>{x.whatsapp}<input value={form.contact_whatsapp || ''} onChange={(e) => field('contact_whatsapp', e.target.value || null)} /></label><label className="wide profile-check"><input type="checkbox" checked={form.show_contact_name} onChange={(event) => setBooleanField('show_contact_name', event.currentTarget.checked)} />{x.showName}</label></div></section>
           <div className="form-submit">{(!editing || editing.status !== 'published') && <label><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /><span />{t.createPublish}</label>}<button type="submit" disabled={busy}>{busy ? t.saving : editing ? t.saveChanges : publishNow ? t.createPublish : t.saveDraft}</button></div>
         </form>}
       </main>

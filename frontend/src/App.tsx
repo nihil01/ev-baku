@@ -8,7 +8,7 @@ import HouseLogo from './components/HouseLogo'
 import BrandedLoader from './components/BrandedLoader'
 import LandingListings from './components/LandingListings'
 import { startAvailabilityNotificationScheduler } from './lib/availabilityNotifications'
-import type { Lang } from './types/api'
+import type { AiSearchResponse, Lang } from './types/api'
 import './App.css'
 
 const languages: Lang[] = ['az', 'en', 'ru']
@@ -23,6 +23,7 @@ export default function App() {
   const [lang, setLang] = useState<Lang>(initialLanguage)
   const [mapOpen, setMapOpen] = useState(false)
   const [aiQuery, setAiQuery] = useState('')
+  const [initialAiResults, setInitialAiResults] = useState<AiSearchResponse | null>(null)
   const [initialListingId, setInitialListingId] = useState<string | null>(null)
   const [mapTransition, setMapTransition] = useState<{ x: number; y: number; radius: number } | null>(null)
   const transitionStartedAt = useRef(0)
@@ -47,9 +48,10 @@ export default function App() {
 
   useEffect(() => startAvailabilityNotificationScheduler(), [])
 
-  const openMap = useCallback((query = '', origin?: { x: number; y: number }, listingId: string | null = null) => {
+  const openMap = useCallback((query = '', origin?: { x: number; y: number }, listingId: string | null = null, aiResults: AiSearchResponse | null = null) => {
     if (mapOpen || mapTransition) return
     setAiQuery(query)
+    setInitialAiResults(aiResults)
     setInitialListingId(listingId)
     if (reduceMotion) {
       setMapOpen(true)
@@ -95,7 +97,7 @@ export default function App() {
       <ConstructionHero
         lang={lang}
         onContinue={(origin) => openMap('', origin)}
-        onAiSearch={(query, origin) => openMap(query, origin)}
+        onAiSearch={(query, origin, results) => openMap(query, origin, null, results || null)}
       />
       <LandingListings
         lang={lang}
@@ -106,7 +108,7 @@ export default function App() {
 
     <AnimatePresence mode="wait">
       {mapOpen && <Suspense key="rental-map" fallback={<div className="map-chunk-loader"><BrandedLoader label={lang === 'ru' ? 'Открываем карту Баку…' : lang === 'az' ? 'Bakı xəritəsi açılır…' : 'Opening the Baku map…'} /></div>}>
-        <MapExperience lang={lang} initialAiQuery={aiQuery} initialListingId={initialListingId || undefined} onReady={finishMapTransition} onClose={() => { setMapTransition(null); setMapOpen(false); setInitialListingId(null) }} />
+        <MapExperience lang={lang} initialAiQuery={aiQuery} initialAiResults={initialAiResults || undefined} initialListingId={initialListingId || undefined} onReady={finishMapTransition} onClose={() => { setMapTransition(null); setMapOpen(false); setInitialListingId(null); setInitialAiResults(null) }} />
       </Suspense>}
     </AnimatePresence>
 

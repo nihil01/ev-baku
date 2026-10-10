@@ -10,6 +10,45 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DATA / 'test-ev.db'}"
 os.environ["STORAGE_BACKEND"] = "local"
 os.environ["LOCAL_STORAGE_PATH"] = str(TEST_DATA / "uploads")
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-the-settings-model"
+TEST_ENV = {
+    "CORS_ALLOW_ALL": "false",
+    "APP_NAME": "ev. Baku API tests",
+    "ENVIRONMENT": "testing",
+    "API_PREFIX": "/api/v1",
+    "CORS_ORIGINS": "http://testserver",
+    "TRUSTED_HOSTS": "testserver",
+    "SESSION_COOKIE_NAME": "ev_session",
+    "CSRF_COOKIE_NAME": "ev_csrf",
+    "SESSION_TTL_DAYS": "14",
+    "COOKIE_SECURE": "false",
+    "COOKIE_DOMAIN": "null",
+    "LANDING_VIDEO_PATH": str(Path(__file__).resolve().parents[1] / "data"),
+    "MINIO_ENDPOINT": "localhost:9000",
+    "MINIO_PUBLIC_ENDPOINT": "localhost:9000",
+    "MINIO_ACCESS_KEY": "test-access-key",
+    "MINIO_SECRET_KEY": "test-secret-key",
+    "MINIO_BUCKET": "test-media",
+    "MINIO_REGION": "test",
+    "MINIO_SECURE": "false",
+    "MINIO_PUBLIC_SECURE": "false",
+    "MAX_IMAGE_MB": "15",
+    "MAX_VIDEO_MB": "100",
+    "GEOAPIFY_API_KEY": "null",
+    "GEOAPIFY_RADIUS_METERS": "1000",
+    "EXCHANGE_RATE_PROVIDER": "exchangerate-api",
+    "EXCHANGE_RATE_API_KEY": "null",
+    "EXCHANGE_RATE_BASE_URL": "null",
+    "EXCHANGE_RATE_CACHE_SECONDS": "21600",
+    "OPENAI_API_KEY": "null",
+    "OPENAI_BASE_URL": "https://api.openai.com/v1",
+    "OPENAI_EMBEDDING_MODEL": "text-embedding-3-small",
+    "OPENAI_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe",
+    "OPENAI_TIMEOUT_SECONDS": "20",
+    "GUEST_AI_REQUEST_LIMIT": "5",
+    "MAX_VOICE_MB": "10",
+}
+for key, value in TEST_ENV.items():
+    os.environ.setdefault(key, value)
 
 from fastapi.testclient import TestClient
 from PIL import Image, ImageChops
@@ -347,3 +386,49 @@ def test_user_listing_media_publish_flow():
         logout = client.post("/api/v1/auth/logout", headers=headers)
         assert logout.status_code == 200
         assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_guest_ai_search_is_locked_after_five_requests_but_authenticated_users_bypass_limit():
+    client_address = ("203.0.113.41", 5041)
+    with TestClient(app, client=client_address) as guest:
+        for expected_remaining in range(4, -1, -1):
+            response = guest.get("/api/v1/listings/ai-search?q=baku%20apartment")
+            assert response.status_code == 200, response.text
+            assert response.json()["guest_requests_remaining"] == expected_remaining
+            assert response.json()["guest_request_limit"] == 5
+
+        blocked = guest.get("/api/v1/listings/ai-search?q=baku%20apartment")
+        assert blocked.status_code == 429
+
+    # The lock survives a new browser session because it is stored in the database.
+    with TestClient(app, client=client_address) as same_ip:
+        assert same_ip.get("/api/v1/listings/ai-search?q=baku%20apartment").status_code == 429
+        registration = same_ip.post("/api/v1/auth/register", json={
+            "email": "quota-user@example.com",
+            "password": "securepass123",
+            "full_name": "Quota User",
+        })
+        assert registration.status_code == 201, registration.text
+        authenticated = same_ip.get("/api/v1/listings/ai-search?q=baku%20apartment")
+        assert authenticated.status_code == 200, authenticated.text
+        assert authenticated.json()["guest_requests_remaining"] is None
+
+
+def test_voice_search_transcribes_audio_and_counts_as_one_guest_request():
+    class FakeTranscription:
+        async def transcribe(self, audio, **kwargs):
+            assert audio == b"fake-opus-audio"
+            assert kwargs["content_type"] == "audio/webm"
+            assert kwargs["language"] == "ru"
+            return "квартира с балконом в Ясамале"
+
+    with TestClient(app, client=("203.0.113.42", 5042)) as client:
+        app.state.transcription = FakeTranscription()
+        response = client.post(
+            "/api/v1/listings/voice-search",
+            data={"lang": "ru"},
+            files={"file": ("voice.webm", b"fake-opus-audio", "audio/webm;codecs=opus")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["query"] == "квартира с балконом в Ясамале"
+        assert response.json()["guest_requests_remaining"] == 4

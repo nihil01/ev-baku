@@ -85,7 +85,14 @@ export type Listing = {
 }
 
 export type ListingPage = { items: Listing[]; total: number; page: number; page_size: number }
-export type AiSearchResponse = { items: Listing[]; total: number; query: string; mode: 'semantic' | 'text' }
+export type AiSearchResponse = {
+  items: Listing[]
+  total: number
+  query: string
+  mode: 'semantic' | 'text'
+  guest_requests_remaining: number | null
+  guest_request_limit: number | null
+}
 export type ExchangeRates = {
   base: 'AZN'
   rates: Record<Currency, number>

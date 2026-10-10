@@ -1,20 +1,22 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..ai_search import EmbeddingService, cosine_similarity, listing_embedding_text, source_hash, text_similarity
+from ..config import Settings, get_settings
 from ..database import get_db
-from ..dependencies import AuthContext, csrf_protected, current_auth
+from ..dependencies import AuthContext, csrf_protected, current_auth, optional_auth
 from ..external import (
     NEARBY_CACHE_VERSION,
     NEARBY_DISPLAY_RADIUS_METERS,
     ExchangeRateService,
     GeoapifyService,
 )
+from ..guest_quota import consume_guest_ai_request
 from ..models import (
     ContactMethod,
     District,
@@ -36,6 +38,7 @@ from ..schemas import (
     NearbyPlace,
 )
 from ..serializers import listing_to_dict
+from ..speech import TranscriptionError, TranscriptionService
 from ..storage import ObjectStorage
 
 router = APIRouter(tags=["listings"])
@@ -165,14 +168,15 @@ async def search_listings(
     return ListingPage(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.get("/listings/ai-search", response_model=AiSearchResponse)
-async def ai_search_listings(
+async def run_ai_listing_search(
     request: Request,
-    q: str = Query(min_length=2, max_length=500),
-    limit: int = Query(default=30, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-):
-    query = q.strip()
+    query: str,
+    limit: int,
+    db: AsyncSession,
+    *,
+    guest_requests_remaining: int | None,
+    guest_request_limit: int | None,
+) -> AiSearchResponse:
     result = await db.execute(
         select(Listing)
         .options(*listing_load_options(include_embedding=True))
@@ -226,7 +230,83 @@ async def ai_search_listings(
 
     matches = [item for score, item in sorted(scored, key=lambda pair: pair[0], reverse=True) if score > 0][:limit]
     items = [ListingRead.model_validate(listing_to_dict(item)) for item in matches]
-    return AiSearchResponse(items=items, total=len(items), query=query, mode=mode)
+    return AiSearchResponse(
+        items=items,
+        total=len(items),
+        query=query,
+        mode=mode,
+        guest_requests_remaining=guest_requests_remaining,
+        guest_request_limit=guest_request_limit,
+    )
+
+
+@router.get("/listings/ai-search", response_model=AiSearchResponse)
+async def ai_search_listings(
+    request: Request,
+    q: str = Query(min_length=2, max_length=500),
+    limit: int = Query(default=30, ge=1, le=100),
+    auth: AuthContext | None = Depends(optional_auth),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    remaining = await consume_guest_ai_request(request, auth, db, settings)
+    return await run_ai_listing_search(
+        request,
+        q.strip(),
+        limit,
+        db,
+        guest_requests_remaining=remaining,
+        guest_request_limit=settings.guest_ai_request_limit if auth is None else None,
+    )
+
+
+@router.post("/listings/voice-search", response_model=AiSearchResponse)
+async def voice_search_listings(
+    request: Request,
+    file: UploadFile = File(...),
+    lang: str = Form(default="ru", pattern="^(az|en|ru)$"),
+    limit: int = Form(default=30, ge=1, le=100),
+    auth: AuthContext | None = Depends(optional_auth),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    supported_types = {
+        "audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav",
+    }
+    if content_type not in supported_types:
+        raise HTTPException(status_code=415, detail="Unsupported voice recording format")
+
+    max_bytes = settings.max_voice_mb * 1024 * 1024
+    audio = await file.read(max_bytes + 1)
+    await file.close()
+    if not audio:
+        raise HTTPException(status_code=422, detail="The voice recording is empty")
+    if len(audio) > max_bytes:
+        raise HTTPException(status_code=413, detail="The voice recording is too large")
+
+    remaining = await consume_guest_ai_request(request, auth, db, settings)
+    service: TranscriptionService = request.app.state.transcription
+    try:
+        transcript = await service.transcribe(
+            audio,
+            filename=file.filename or "voice-search.webm",
+            content_type=content_type,
+            language=lang,
+        )
+    except TranscriptionError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if len(transcript) < 2:
+        raise HTTPException(status_code=422, detail="Speech could not be recognized")
+
+    return await run_ai_listing_search(
+        request,
+        transcript[:500],
+        limit,
+        db,
+        guest_requests_remaining=remaining,
+        guest_request_limit=settings.guest_ai_request_limit if auth is None else None,
+    )
 
 
 @router.get("/listings/{listing_id}", response_model=ListingRead)

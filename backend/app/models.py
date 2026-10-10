@@ -99,6 +99,18 @@ class Session(Base):
     user: Mapped[User] = relationship(back_populates="sessions")
 
 
+class GuestAiUsage(Base):
+    """Persistent guest quota keyed by an irreversible, server-secret IP hash."""
+
+    __tablename__ = "guest_ai_usage"
+
+    ip_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Listing(Base):
     __tablename__ = "listings"
 

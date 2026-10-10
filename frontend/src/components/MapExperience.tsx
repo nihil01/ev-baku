@@ -20,13 +20,13 @@ import {
   districts,
   type District,
 } from '../data/mapConfig'
-import { api, MAP_STYLE_URL, mediaUrl } from '../lib/api'
+import { api, ApiError, MAP_STYLE_URL, mediaUrl } from '../lib/api'
 import {
   hasAvailabilityReminder,
   removeAvailabilityReminder,
   subscribeToAvailability,
 } from '../lib/availabilityNotifications'
-import type { Currency, DistrictId, Lang, Listing, NearbyPlace, PropertyType } from '../types/api'
+import type { AiSearchResponse, Currency, DistrictId, Lang, Listing, NearbyPlace, PropertyType } from '../types/api'
 import AccountAccess from './AccountAccess'
 import HouseLogo from './HouseLogo'
 import BrandedLoader from './BrandedLoader'
@@ -34,7 +34,7 @@ import ErrorToast from './ErrorToast'
 import { useAuth } from '../context/AuthContext'
 import './MapExperience.css'
 
-type Props = { lang: Lang; initialAiQuery?: string; initialListingId?: string; onReady?: () => void; onClose: () => void }
+type Props = { lang: Lang; initialAiQuery?: string; initialAiResults?: AiSearchResponse; initialListingId?: string; onReady?: () => void; onClose: () => void }
 type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
@@ -65,6 +65,12 @@ const availabilityCopy = {
   az: { title: 'Hələ mövcud deyil', text: 'Bu ev {date} tarixindən kirayə üçün açılacaq.', notify: 'Mövcud olduqda bildir', active: 'Bildiriş aktivdir · ləğv et', subscribed: 'Brauzer bildirişi aktivləşdirildi.', cancelled: 'Bildiriş ləğv edildi.', denied: 'Brauzer bildirişlərinə icazə verilməyib.', unsupported: 'Bu brauzer bildirişləri dəstəkləmir.' },
   en: { title: 'Not available yet', text: 'This home will become available on {date}.', notify: 'Notify me when available', active: 'Notification on · cancel', subscribed: 'Browser notification enabled.', cancelled: 'Notification cancelled.', denied: 'Browser notifications are not permitted.', unsupported: 'This browser does not support notifications.' },
   ru: { title: 'Пока недоступна', text: 'Квартира освободится {date}.', notify: 'Уведомить, когда доступна', active: 'Уведомление включено · отменить', subscribed: 'Уведомление браузера включено.', cancelled: 'Уведомление отменено.', denied: 'Браузер не разрешил уведомления.', unsupported: 'Этот браузер не поддерживает уведомления.' },
+} as const
+
+const guestSearchCopy = {
+  az: { remaining: 'pulsuz axtarış qalıb', limit: '5 pulsuz axtarış bitdi. Davam etmək üçün hesaba daxil olun.' },
+  en: { remaining: 'free searches left', limit: 'Your 5 free searches are used. Sign in to continue.' },
+  ru: { remaining: 'бесплатных поисков осталось', limit: '5 бесплатных поисков закончились. Войдите, чтобы продолжить.' },
 } as const
 
 const nearbyGroupOrder: NearbyGroupKey[] = ['groceries', 'food', 'healthcare', 'education', 'transport', 'parks', 'shopping', 'services']
@@ -294,7 +300,7 @@ function NearbyIcon({ type }: { type: NearbyAmenityKey }) {
   </svg>
 }
 
-export default function MapExperience({ lang, initialAiQuery = '', initialListingId, onReady, onClose }: Props) {
+export default function MapExperience({ lang, initialAiQuery = '', initialAiResults, initialListingId, onReady, onClose }: Props) {
   const t = copy[lang]
   const x = detailExtra[lang]
   const nearbyText = nearbyCopy[lang]
@@ -311,6 +317,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialListin
   const [aiResults, setAiResults] = useState<Listing[] | null>(null)
   const [aiMode, setAiMode] = useState<'semantic' | 'text' | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
+  const [guestQuota, setGuestQuota] = useState<{ remaining: number; limit: number } | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>(() => (localStorage.getItem('ev-currency') as Currency) || 'AZN')
   const [exchangeRates, setExchangeRates] = useState<Record<Currency, number> | null>(null)
   const [district, setDistrict] = useState<'all' | DistrictId>('all')
@@ -368,13 +375,23 @@ export default function MapExperience({ lang, initialAiQuery = '', initialListin
     try {
       const result = await api.aiSearch(clean)
       setAiResults(result.items); setAiMode(result.mode); setListingsError(''); setToastError('')
+      setGuestQuota(result.guest_requests_remaining === null || result.guest_request_limit === null ? null : { remaining: result.guest_requests_remaining, limit: result.guest_request_limit })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'AI search unavailable'
+      const message = error instanceof ApiError && error.status === 429 ? guestSearchCopy[lang].limit : error instanceof Error ? error.message : 'AI search unavailable'
       setAiResults([]); setAiMode(null); setListingsError(message); setToastError(message)
     } finally { setAiBusy(false) }
-  }, [])
+  }, [lang])
 
-  useEffect(() => { if (initialAiQuery) void runAiSearch(initialAiQuery) }, [initialAiQuery, runAiSearch])
+  useEffect(() => {
+    if (initialAiResults) {
+      setQuery(initialAiResults.query)
+      setAiResults(initialAiResults.items)
+      setAiMode(initialAiResults.mode)
+      setGuestQuota(initialAiResults.guest_requests_remaining === null || initialAiResults.guest_request_limit === null ? null : { remaining: initialAiResults.guest_requests_remaining, limit: initialAiResults.guest_request_limit })
+      return
+    }
+    if (initialAiQuery) void runAiSearch(initialAiQuery)
+  }, [initialAiQuery, initialAiResults, runAiSearch])
 
   useEffect(() => {
     if (!initialListingId || initialListingOpenedRef.current === initialListingId) return
@@ -860,7 +877,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialListin
 
       <section className="results-pane" aria-label={t.results}>
         <div className="results-heading">
-          <div><span>{aiBusy ? x.aiSearching : aiMode ? (aiMode === 'semantic' ? x.aiSemantic : x.aiText) : 'BAKU · RENTALS'}</span><h1>{t.rent}</h1><p><strong>{visibleResults.length}</strong> {resultLabel}</p></div>
+          <div><span>{aiBusy ? x.aiSearching : aiMode ? (aiMode === 'semantic' ? x.aiSemantic : x.aiText) : 'BAKU · RENTALS'}{guestQuota && ` · ${guestQuota.remaining}/${guestQuota.limit} ${guestSearchCopy[lang].remaining}`}</span><h1>{t.rent}</h1><p><strong>{visibleResults.length}</strong> {resultLabel}</p></div>
           <label><span>{t.sort}</span><select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
             <option value="recommended">{t.recommended}</option><option value="priceAsc">{t.cheapest}</option>
             <option value="priceDesc">{t.expensive}</option><option value="areaDesc">{t.largest}</option>

@@ -40,11 +40,15 @@
 .hero-ai-search button { min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 9px; border-radius: 12px; color: #fff; background: #123f34; font-size: 12px; font-weight: 800; transition: color .18s,background .18s,opacity .18s,transform .18s; }
 .hero-ai-search button svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .hero-ai-search button[type="button"] { width: 46px; color: #123f34; background: #e7efea; }
-.hero-ai-search button[type="button"].listening { color: #fff; background: #ef7540; animation: voice-pulse 1s infinite alternate; }
+.hero-ai-search button[type="button"].recording { color: #fff; background: #ef7540; animation: voice-pulse 1s infinite alternate; }
+.hero-ai-search button[type="button"].processing { color: #fff; background: #315f53; }
 .hero-ai-search button[type="submit"] { padding: 0 19px; }
 .hero-ai-search button:not(:disabled):hover { transform: translateY(-1px); }
 .hero-ai-search button:disabled { opacity: .42; cursor: default; }
 @keyframes voice-pulse { to { box-shadow: 0 0 0 7px rgba(239,117,64,.18); } }
+.hero-ai-search__voice-status { width: fit-content; min-height: 28px; display: flex; align-items: center; gap: 8px; margin: 8px 0 -4px 8px; padding: 0 11px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; color: #fff; background: rgba(6,28,23,.6); backdrop-filter: blur(10px); font-size: 10px; font-weight: 750; pointer-events: none; }
+.hero-ai-search__voice-status i { width: 7px; height: 7px; border-radius: 50%; background: #ef7540; box-shadow: 0 0 0 4px rgba(239,117,64,.18); }
+.hero-ai-search__voice-status.processing i { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.35); border-top-color: #f3cf78; background: transparent; box-shadow: none; animation: hero-video-spin .7s linear infinite; }
 
 .construction-hero__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 19px; margin-top: 22px; }
 .construction-hero__primary { position: relative; min-height: 56px; display: inline-flex; align-items: center; justify-content: center; gap: 22px; overflow: hidden; padding: 0 24px; border-radius: 999px; color: #123f34; background: #f3cf78; box-shadow: 0 16px 38px rgba(1,18,14,.3); font-size: 13px; font-weight: 850; transition: color .2s,background .2s,transform .2s; }
