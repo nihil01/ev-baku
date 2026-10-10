@@ -283,10 +283,6 @@ export default function ConstructionHero({ lang, onContinue, onAiSearch }: Props
       </div>
     </motion.div>
 
-    <motion.div className="construction-hero__stats" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .3, duration: .55 }}>
-      {[t.statOne, t.statTwo, t.statThree].map((item, index) => <div key={item}><strong>0{index + 1}</strong><span>{item}</span></div>)}
-    </motion.div>
-
     {!videoFailed && videoSource && <button type="button" className="construction-hero__video-control" onClick={toggleVideo} aria-label={videoPlaying ? t.pause : t.play} title={videoPlaying ? t.pause : t.play}>
       <Icon name={videoPlaying ? 'pause' : 'play'} /><span>{videoPlaying ? t.pause : t.play}</span>
     </button>}
