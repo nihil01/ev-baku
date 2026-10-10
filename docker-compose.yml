@@ -1,4 +1,15 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8084:80"
+    depends_on:
+      - api
+
   api:
     build: ./backend
     restart: unless-stopped
@@ -43,7 +54,7 @@ services:
       STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
 
       MINIO_ENDPOINT: garage:3900
-      MINIO_PUBLIC_ENDPOINT: localhost:9000
+      MINIO_PUBLIC_ENDPOINT: garage:3900
 
       MINIO_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
       MINIO_SECRET_KEY: ${GARAGE_SECRET_KEY}
