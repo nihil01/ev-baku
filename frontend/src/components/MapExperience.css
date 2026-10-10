@@ -140,6 +140,14 @@
 .listing-card:hover .listing-card__image img { transform: scale(1.035); }
 .listing-card__image span { position: absolute; bottom: 10px; left: 10px; padding: 6px 8px; border-radius: 6px; color: #fff; background: rgba(23,60,52,.86); backdrop-filter: blur(8px); font-size: 7px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .listing-save { position: absolute; z-index: 3; top: 10px; right: 10px; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 50%; color: var(--green)!important; background: rgba(255,255,255,.9); box-shadow: 0 5px 16px #173c3420; }
+.listing-compare { position: absolute; z-index: 3; top: 10px; right: 53px; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 50%; color: var(--green); background: rgba(255,255,255,.9); box-shadow: 0 5px 16px #173c3420; }
+.listing-compare.active { color: #fff; border-color: var(--green); background: var(--green); }
+.listing-compare svg { width: 19px; height: 19px; }
+.detail-compare { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 12px; border: 1px solid #bfd0c4; border-radius: 13px; color: var(--green); background: #f4f7f2; font-size: 10px; font-weight: 850; }
+.detail-compare.active { color: #fff; border-color: var(--green); background: var(--green); }
+.detail-compare svg { width: 20px; height: 20px; }
+.landlord-profile-link { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; margin-top: 4px; padding: 0; color: var(--green); background: transparent; font-weight: 850; text-align: left; text-decoration: underline; text-decoration-color: #e5a989; text-underline-offset: 4px; }
+.landlord-profile-link svg { width: 16px; height: 16px; }
 .listing-save svg { width: 17px; }
 .listing-save.active { color: #fff!important; background: var(--orange); }
 .listing-save.active svg { fill: currentColor; }

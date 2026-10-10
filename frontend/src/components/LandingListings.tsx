@@ -3,6 +3,8 @@ import { motion } from 'motion/react'
 import { districtLabel } from '../data/mapConfig'
 import { api, listingUrl, mediaUrl } from '../lib/api'
 import type { Lang, Listing } from '../types/api'
+import { useComparison } from '../context/ComparisonContext'
+import { CompareIcon } from './PropertyComparison'
 import './LandingListings.css'
 
 type Point = { x: number; y: number }
@@ -13,9 +15,9 @@ type Props = {
 }
 
 const copy = {
-  az: { eyebrow: 'YENİ ELANLAR', title: 'Bakıda yaşamaq üçün yerlər', description: 'Son əlavə olunan evlərə bax və tam seçimi xəritədə kəşf et.', all: 'Bütün evlərə bax', details: 'Elana bax', rooms: 'otaq', month: '/ay', loading: 'Elanlar yüklənir', empty: 'Hələ dərc olunmuş elan yoxdur.', retry: 'Yenidən yoxla', error: 'Elanları yükləmək mümkün olmadı.' },
-  en: { eyebrow: 'FRESH LISTINGS', title: 'Places made for life in Baku', description: 'Browse the newest homes, then explore the full collection on the map.', all: 'Explore all homes', details: 'View home', rooms: 'rooms', month: '/mo', loading: 'Loading listings', empty: 'No published listings yet.', retry: 'Try again', error: 'Listings could not be loaded.' },
-  ru: { eyebrow: 'СВЕЖИЕ ОБЪЯВЛЕНИЯ', title: 'Места для жизни в Баку', description: 'Посмотри последние добавленные дома, а всю подборку исследуй на карте.', all: 'Смотреть все дома', details: 'Открыть объявление', rooms: 'комн.', month: '/мес', loading: 'Загружаем объявления', empty: 'Опубликованных объявлений пока нет.', retry: 'Попробовать снова', error: 'Не удалось загрузить объявления.' },
+  az: { eyebrow: 'YENİ ELANLAR', title: 'Bakıda yaşamaq üçün yerlər', description: 'Son əlavə olunan evlərə bax və tam seçimi xəritədə kəşf et.', all: 'Bütün evlərə bax', details: 'Elana bax', rooms: 'otaq', month: '/ay', loading: 'Elanlar yüklənir', empty: 'Hələ dərc olunmuş elan yoxdur.', retry: 'Yenidən yoxla', error: 'Elanları yükləmək mümkün olmadı.', compare: 'Müqayisə et', compared: 'Müqayisədə' },
+  en: { eyebrow: 'FRESH LISTINGS', title: 'Places made for life in Baku', description: 'Browse the newest homes, then explore the full collection on the map.', all: 'Explore all homes', details: 'View home', rooms: 'rooms', month: '/mo', loading: 'Loading listings', empty: 'No published listings yet.', retry: 'Try again', error: 'Listings could not be loaded.', compare: 'Compare', compared: 'Compared' },
+  ru: { eyebrow: 'СВЕЖИЕ ОБЪЯВЛЕНИЯ', title: 'Места для жизни в Баку', description: 'Посмотри последние добавленные дома, а всю подборку исследуй на карте.', all: 'Смотреть все дома', details: 'Открыть объявление', rooms: 'комн.', month: '/мес', loading: 'Загружаем объявления', empty: 'Опубликованных объявлений пока нет.', retry: 'Попробовать снова', error: 'Не удалось загрузить объявления.', compare: 'Сравнить', compared: 'В сравнении' },
 } as const
 
 const currencySymbol = { AZN: '₼', USD: '$', EUR: '€', RUB: '₽' } as const
@@ -38,6 +40,7 @@ export default function LandingListings({ lang, onExplore, onListingOpen }: Prop
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
+  const comparison = useComparison()
   const t = copy[lang]
 
   useEffect(() => {
@@ -64,7 +67,9 @@ export default function LandingListings({ lang, onExplore, onListingOpen }: Prop
     {!loading && !error && listings.length > 0 && <div className="landing-listings__grid">
       {listings.map((listing, index) => {
         const cover = listing.media.find((item) => item.is_cover && item.media_type === 'image') || listing.media.find((item) => item.media_type === 'image')
+        const compared = comparison.isCompared(listing.id)
         return <motion.article key={listing.id} className={`landing-listing${index === 0 ? ' landing-listing--featured' : ''}`} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: .15 }} transition={{ delay: Math.min(index * .045, .2), duration: .42 }}>
+          <button type="button" className={`landing-listing__compare${compared ? ' active' : ''}`} disabled={!compared && comparison.items.length >= comparison.maxItems} aria-pressed={compared} onClick={() => comparison.toggle(listing)}><CompareIcon /><span>{compared ? t.compared : t.compare}</span></button>
           <a className="landing-listing__button" href={listingUrl(listing.id)} onClick={(event) => {
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
             event.preventDefault()

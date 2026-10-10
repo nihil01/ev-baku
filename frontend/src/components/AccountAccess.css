@@ -182,9 +182,11 @@
 .profile-form h3 { margin: 0 0 5px; font-size: 19px; }
 .profile-form>label { display: grid; gap: 7px; color: #667971; font-size: 8px; font-weight: 800; }
 .profile-form input { min-height: 43px; padding: 10px 12px; border: 1px solid #d7dfd8; border-radius: 9px; color: #173c34; background: #fff; font: inherit; }
+.profile-form textarea { resize: vertical; min-height: 112px; padding: 11px 12px; border: 1px solid #d7dfd8; border-radius: 9px; color: #173c34; background: #fff; font: inherit; font-size: 11px; line-height: 1.55; }
 .profile-form>.profile-check,.listing-form .profile-check { display: flex; flex-direction: row; align-items: center; gap: 9px; }
 .profile-check input { width: 18px; min-height: 18px; }
 .profile-form>button { min-height: 45px; border-radius: 9px; color: #fff; background: #173c34; font-size: 9px; font-weight: 800; }
+.profile-form>.profile-public-link { color: #173c34; border: 1px solid #c9d7cd; background: #f0f5ef; }
 .chat-layout { min-height: 65vh; display: grid; grid-template-columns: 250px 1fr; overflow: hidden; border: 1px solid #dce4dd; border-radius: 16px; background: #fff; }
 .chat-layout>aside { overflow-y: auto; border-right: 1px solid #e0e6e1; background: #f7f9f5; }
 .chat-layout>aside>button { width: 100%; display: grid; gap: 4px; padding: 15px; border-bottom: 1px solid #e2e8e3; text-align: left; background: transparent; }

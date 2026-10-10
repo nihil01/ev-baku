@@ -8,7 +8,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>
   register: (payload: { email: string; password: string; full_name: string; phone?: string }) => Promise<void>
   logout: () => Promise<void>
-  updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name'>>) => Promise<void>
+  updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name' | 'bio'>>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)

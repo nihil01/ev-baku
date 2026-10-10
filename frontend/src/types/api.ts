@@ -22,8 +22,30 @@ export type User = {
   telegram: string | null
   whatsapp: string | null
   show_full_name: boolean
+  bio: string | null
   role: 'user' | 'admin'
   created_at: string
+}
+
+export type LandlordReview = {
+  id: string
+  author_id: string
+  author_name: string
+  rating: number
+  body: string
+  created_at: string
+  updated_at: string
+}
+
+export type LandlordProfile = {
+  id: string
+  display_name: string
+  bio: string | null
+  created_at: string
+  rating: number | null
+  reviews_count: number
+  listings: Listing[]
+  reviews: LandlordReview[]
 }
 
 export type ListingMedia = {

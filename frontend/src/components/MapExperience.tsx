@@ -32,9 +32,11 @@ import HouseLogo from './HouseLogo'
 import BrandedLoader from './BrandedLoader'
 import ErrorToast from './ErrorToast'
 import { useAuth } from '../context/AuthContext'
+import { useComparison } from '../context/ComparisonContext'
+import { CompareIcon } from './PropertyComparison'
 import './MapExperience.css'
 
-type Props = { lang: Lang; initialAiQuery?: string; initialAiResults?: AiSearchResponse; initialListingId?: string; onReady?: () => void; onListingOpen: (listingId: string) => void; onListingClose: () => void; onClose: () => void }
+type Props = { lang: Lang; initialAiQuery?: string; initialAiResults?: AiSearchResponse; initialListingId?: string; onReady?: () => void; onListingOpen: (listingId: string) => void; onLandlordOpen: (landlordId: string) => void; onListingClose: () => void; onClose: () => void }
 type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
@@ -77,6 +79,12 @@ const guestSearchCopy = {
   az: { remaining: 'pulsuz axtarış qalıb', limit: '5 pulsuz axtarış bitdi. Davam etmək üçün hesaba daxil olun.' },
   en: { remaining: 'free searches left', limit: 'Your 5 free searches are used. Sign in to continue.' },
   ru: { remaining: 'бесплатных поисков осталось', limit: '5 бесплатных поисков закончились. Войдите, чтобы продолжить.' },
+} as const
+
+const comparisonCopy = {
+  az: { compare: 'Müqayisə et', compared: 'Müqayisədə', full: 'Müqayisə üçün maksimum 4 elan seçə bilərsiniz.', profile: 'Ev sahibinin profilinə bax' },
+  en: { compare: 'Compare', compared: 'Compared', full: 'You can compare up to 4 listings.', profile: 'View landlord profile' },
+  ru: { compare: 'Сравнить', compared: 'В сравнении', full: 'Можно сравнить не больше 4 объявлений.', profile: 'Открыть профиль арендодателя' },
 } as const
 
 const nearbyGroupOrder: NearbyGroupKey[] = ['groceries', 'food', 'healthcare', 'education', 'transport', 'parks', 'shopping', 'services']
@@ -306,13 +314,15 @@ function NearbyIcon({ type }: { type: NearbyAmenityKey }) {
   </svg>
 }
 
-export default function MapExperience({ lang, initialAiQuery = '', initialAiResults, initialListingId, onReady, onListingOpen, onListingClose, onClose }: Props) {
+export default function MapExperience({ lang, initialAiQuery = '', initialAiResults, initialListingId, onReady, onListingOpen, onLandlordOpen, onListingClose, onClose }: Props) {
   const t = copy[lang]
   const x = detailExtra[lang]
   const nearbyText = nearbyCopy[lang]
   const availabilityText = availabilityCopy[lang]
   const listingCosts = listingCostsCopy[lang]
   const { user } = useAuth()
+  const comparison = useComparison()
+  const compareText = comparisonCopy[lang]
   const mapRef = useRef<MapRef | null>(null)
   const galleryTriggerRef = useRef<HTMLButtonElement | null>(null)
   const lightboxRef = useRef<HTMLDivElement | null>(null)
@@ -752,7 +762,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
         <button type="button" className={layout === 'map' ? 'active' : ''} onClick={() => changeLayout('map')}><Icon name="map" /><span>{t.map}</span></button>
         <button type="button" className={layout === 'list' ? 'active' : ''} onClick={() => changeLayout('list')}><Icon name="list" /><span>{t.list}</span></button>
       </div>
-      <AccountAccess lang={lang} compact onListingsChanged={() => setListingsVersion((value) => value + 1)} onOpenListing={onListingOpen} />
+      <AccountAccess lang={lang} compact onListingsChanged={() => setListingsVersion((value) => value + 1)} onOpenListing={onListingOpen} onOpenLandlord={onLandlordOpen} />
       <button type="button" className="search-back" onClick={onClose}><span>{t.back}</span><Icon name="close" /></button>
     </motion.header>
 
@@ -916,6 +926,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
               <button type="button" className={`listing-save${isSaved ? ' active' : ''}`} aria-label={isSaved ? t.unsave : t.save} onClick={(event) => { event.stopPropagation(); toggleSaved(listing.id) }}>
                 <Icon name="heart" />
               </button>
+              <button type="button" className={`listing-compare${comparison.isCompared(listing.id) ? ' active' : ''}`} aria-label={`${comparison.isCompared(listing.id) ? compareText.compared : compareText.compare}: ${listing.title}`} aria-pressed={comparison.isCompared(listing.id)} onClick={(event) => { event.stopPropagation(); if (comparison.toggle(listing) === 'full') setToastError(compareText.full) }}><CompareIcon /></button>
               <div className="listing-card__body">
                 <div className="listing-price"><b>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]}</b><span>{t.month}</span>{listing.discount_tiers.length > 0 && <em>−{Math.max(...listing.discount_tiers.map((tier) => tier.discount_percent))}%</em>}</div>
                 <h2>{listing.title}</h2>
@@ -965,6 +976,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
               <div className="listing-modal__title"><div><span>{t.details}</span><h2 id="listing-modal-title">{detailListing.title}</h2><p>{detailListing.address}</p></div><button type="button" className={saved.includes(detailListing.id) ? 'active' : ''} onClick={() => toggleSaved(detailListing.id)} aria-label={saved.includes(detailListing.id) ? t.unsave : t.save}><Icon name="heart" /></button></div>
               <div className="modal-price"><b>{detailDisplayPrice && money(detailDisplayPrice.value)} {detailDisplayPrice && currencySymbol[detailDisplayPrice.currency]}</b><span>{t.month}</span>{detailListing.rent_currency !== displayCurrency && <small>{money(Number(detailListing.monthly_rent))} {currencySymbol[detailListing.rent_currency]} · original</small>}</div>
               <div className="modal-facts"><div><b>{detailListing.rooms}</b><span>{t.rooms}</span></div><div><b>{detailListing.area_sqm} {t.area}</b><span>{['house', 'villa'].includes(detailListing.property_type) ? t.house : t.apartment}</span></div><div><b>{detailListing.furnished ? t.yes : t.no}</b><span>{t.furnished}</span></div></div>
+              <button type="button" className={`detail-compare${comparison.isCompared(detailListing.id) ? ' active' : ''}`} aria-pressed={comparison.isCompared(detailListing.id)} onClick={() => { if (comparison.toggle(detailListing) === 'full') setToastError(compareText.full) }}><CompareIcon />{comparison.isCompared(detailListing.id) ? compareText.compared : compareText.compare}</button>
               {detailNearbyHighlights.length > 0 && <div className="nearby-glance" aria-label={nearbyText.infrastructure}>
                 <span>{x.nearby}</span>
                 <div>{detailNearbyHighlights.map(({ key, place }) => <article key={`${key}-${place.place_id}`}>
@@ -1026,7 +1038,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
                 <div className={detailListing.smoking_allowed ? 'allowed' : 'denied'}><i>{detailListing.smoking_allowed ? '✓' : '×'}</i><span>{detailListing.smoking_allowed ? t.smokingAllowed : t.smokingNotAllowed}</span></div>
               </div></section>
 
-              <div className="modal-source"><p>{t.sourceNote}<br /><b>{detailListing.show_contact_name ? detailListing.contact_name : x.owner}</b></p>{detailListing.contact_method !== 'messages' && detailListing.contact_phone ? <><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a>{detailListing.contact_telegram && <a href={telegramUrl(detailListing.contact_telegram)} target="_blank" rel="noreferrer"><span>{x.telegram}</span><b>{detailListing.contact_telegram}</b><Icon name="arrow" /></a>}{detailListing.contact_whatsapp && <a href={whatsappUrl(detailListing.contact_whatsapp)} target="_blank" rel="noreferrer"><span>{x.whatsapp}</span><b>{detailListing.contact_whatsapp}</b><Icon name="arrow" /></a>}</> : <div className="modal-source__privacy"><i>●</i><span>{contactPrivacyCopy[lang]}</span></div>}</div>
+              <div className="modal-source"><p>{t.sourceNote}<br /><button type="button" className="landlord-profile-link" onClick={() => onLandlordOpen(detailListing.owner_id)}>{detailListing.show_contact_name ? detailListing.contact_name : x.owner}<Icon name="arrow" /></button></p>{detailListing.contact_method !== 'messages' && detailListing.contact_phone ? <><a href={`tel:${detailListing.contact_phone}`}><span>{t.source}</span><b>{detailListing.contact_phone}</b><Icon name="arrow" /></a>{detailListing.contact_telegram && <a href={telegramUrl(detailListing.contact_telegram)} target="_blank" rel="noreferrer"><span>{x.telegram}</span><b>{detailListing.contact_telegram}</b><Icon name="arrow" /></a>}{detailListing.contact_whatsapp && <a href={whatsappUrl(detailListing.contact_whatsapp)} target="_blank" rel="noreferrer"><span>{x.whatsapp}</span><b>{detailListing.contact_whatsapp}</b><Icon name="arrow" /></a>}</> : <div className="modal-source__privacy"><i>●</i><span>{contactPrivacyCopy[lang]}</span></div>}</div>
               {user?.id !== detailListing.owner_id && detailListing.contact_method !== 'phone' && <form className="owner-chat" onSubmit={sendOwnerMessage}><h3>{x.chat}</h3><div><input name="message" maxLength={2000} required placeholder={x.message} /><button type="submit">{x.send}</button></div>{chatStatus && <p>{chatStatus}</p>}</form>}
             </div>
           </div>

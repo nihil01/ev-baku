@@ -87,12 +87,19 @@ class User(Base):
     telegram: Mapped[str | None] = mapped_column(String(64), nullable=True)
     whatsapp: Mapped[str | None] = mapped_column(String(64), nullable=True)
     show_full_name: Mapped[bool] = mapped_column(Boolean, default=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     listings: Mapped[list["Listing"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    received_reviews: Mapped[list["LandlordReview"]] = relationship(
+        back_populates="landlord", foreign_keys="LandlordReview.landlord_id", cascade="all, delete-orphan"
+    )
+    written_reviews: Mapped[list["LandlordReview"]] = relationship(
+        back_populates="author", foreign_keys="LandlordReview.author_id", cascade="all, delete-orphan"
+    )
 
 
 class Session(Base):
@@ -247,6 +254,22 @@ class Favorite(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     listing_id: Mapped[str] = mapped_column(ForeignKey("listings.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LandlordReview(Base):
+    __tablename__ = "landlord_reviews"
+    __table_args__ = (UniqueConstraint("landlord_id", "author_id", name="uq_landlord_review_author"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    landlord_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    landlord: Mapped[User] = relationship(back_populates="received_reviews", foreign_keys=[landlord_id])
+    author: Mapped[User] = relationship(back_populates="written_reviews", foreign_keys=[author_id])
 
 
 class Conversation(Base):

@@ -12,7 +12,7 @@ from .config import get_settings
 from .database import create_schema
 from .external import ExchangeRateService, GeoapifyService
 from .rate_limit import SlidingWindowRateLimiter, client_identity
-from .routers import auth, external, listings, media, social
+from .routers import auth, external, listings, media, profiles, social
 from .speech import TranscriptionService
 from .storage import ObjectStorage
 
@@ -154,6 +154,7 @@ app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(listings.router, prefix=settings.api_prefix)
 app.include_router(media.router, prefix=settings.api_prefix)
 app.include_router(social.router, prefix=settings.api_prefix)
+app.include_router(profiles.router, prefix=settings.api_prefix)
 app.include_router(external.router, prefix=settings.api_prefix)
 
 

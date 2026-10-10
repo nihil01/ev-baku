@@ -1,4 +1,4 @@
-import type { AddressSuggestion, AiSearchResponse, ChatMessage, Conversation, ExchangeRates, Lang, Listing, ListingMedia, ListingPage, ListingPayload, NearbyPlace, User } from '../types/api'
+import type { AddressSuggestion, AiSearchResponse, ChatMessage, Conversation, ExchangeRates, LandlordProfile, LandlordReview, Lang, Listing, ListingMedia, ListingPage, ListingPayload, NearbyPlace, User } from '../types/api'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const MAP_STYLE_URL = `${API_BASE}/map-style.json`
@@ -51,7 +51,10 @@ export const api = {
   login: (email: string, password: string) => request<{ user: User; csrf_token: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (payload: { email: string; password: string; full_name: string; phone?: string }) => request<{ user: User; csrf_token: string }>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
-  updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name'>>) => request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
+  updateProfile: (payload: Partial<Pick<User, 'full_name' | 'phone' | 'telegram' | 'whatsapp' | 'show_full_name' | 'bio'>>) => request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
+  landlordProfile: (id: string) => request<LandlordProfile>(`/landlords/${id}`),
+  createLandlordReview: (id: string, rating: number, body: string) => request<LandlordReview>(`/landlords/${id}/reviews`, { method: 'POST', body: JSON.stringify({ rating, body }) }),
+  deleteLandlordReview: (landlordId: string, reviewId: string) => request<{ message: string }>(`/landlords/${landlordId}/reviews/${reviewId}`, { method: 'DELETE' }),
   listings: (params: URLSearchParams) => request<ListingPage>(`/listings?${params}`),
   listing: (id: string) => request<Listing>(`/listings/${id}`),
   aiSearch: (query: string, lang: Lang) => request<AiSearchResponse>(`/listings/ai-search?q=${encodeURIComponent(query)}&lang=${lang}`),

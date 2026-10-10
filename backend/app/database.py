@@ -68,6 +68,7 @@ async def _migrate_postgresql(connection) -> None:
     await connection.execute(text(
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS monthly_service_fee NUMERIC(12, 2)"
     ))
+    await connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT"))
 
 
 async def _migrate_sqlite(connection) -> None:
@@ -77,6 +78,7 @@ async def _migrate_sqlite(connection) -> None:
             "telegram": "VARCHAR(64)",
             "whatsapp": "VARCHAR(64)",
             "show_full_name": "BOOLEAN NOT NULL DEFAULT 1",
+            "bio": "TEXT",
         },
         "listings": {
             "rent_currency": "VARCHAR(3) NOT NULL DEFAULT 'AZN'",

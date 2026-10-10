@@ -70,6 +70,7 @@ class UserRead(BaseModel):
     telegram: str | None
     whatsapp: str | None
     show_full_name: bool
+    bio: str | None
     role: UserRole
     created_at: datetime
 
@@ -85,6 +86,7 @@ class UserUpdate(BaseModel):
     telegram: str | None = Field(default=None, max_length=64)
     whatsapp: str | None = Field(default=None, max_length=64)
     show_full_name: bool | None = None
+    bio: str | None = Field(default=None, max_length=1200)
 
     @field_validator("phone", mode="before")
     @classmethod
@@ -298,6 +300,32 @@ class ListingRead(ListingBase):
     @field_serializer("monthly_rent_azn", when_used="json")
     def serialize_azn(self, value: Decimal) -> float:
         return float(value)
+
+
+class LandlordReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    body: str = Field(min_length=10, max_length=1200)
+
+
+class LandlordReviewRead(BaseModel):
+    id: str
+    author_id: str
+    author_name: str
+    rating: int
+    body: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class LandlordProfileRead(BaseModel):
+    id: str
+    display_name: str
+    bio: str | None
+    created_at: datetime
+    rating: float | None
+    reviews_count: int
+    listings: list[ListingRead]
+    reviews: list[LandlordReviewRead]
 
 
 class ListingPage(BaseModel):

@@ -257,11 +257,13 @@ def test_user_listing_media_publish_flow():
             "email": "owner@example.com", "password": "securepass123", "full_name": "Test Owner", "phone": "+994501112233",
         })
         assert registration.status_code == 201, registration.text
+        owner_id = registration.json()["user"]["id"]
         csrf = registration.json()["csrf_token"]
         headers = {"X-CSRF-Token": csrf}
 
         profile = client.patch("/api/v1/auth/me", headers=headers, json={
             "telegram": "@testowner", "whatsapp": "+994501112233", "show_full_name": False,
+            "bio": "I manage long-term homes in Baku and reply quickly to tenant questions.",
         })
         assert profile.status_code == 200, profile.text
         assert profile.json()["telegram"] == "@testowner"
@@ -467,6 +469,38 @@ def test_user_listing_media_publish_flow():
             ).status_code == 403
             assert buyer.delete(f"/api/v1/listings/{listing_id}/favorite", headers=buyer_headers).status_code == 200
             assert buyer.get("/api/v1/me/favorites").json() == []
+
+            public_profile = buyer.get(f"/api/v1/landlords/{owner_id}")
+            assert public_profile.status_code == 200, public_profile.text
+            assert public_profile.json()["display_name"] == "Арендодатель EV BAKU"
+            assert public_profile.json()["listings"][0]["id"] == listing_id
+            assert "long-term homes" in public_profile.json()["bio"]
+            review = buyer.post(
+                f"/api/v1/landlords/{owner_id}/reviews",
+                headers=buyer_headers,
+                json={"rating": 5, "body": "Clear communication and an accurate property description."},
+            )
+            assert review.status_code == 201, review.text
+            review_id = review.json()["id"]
+            assert buyer.post(
+                f"/api/v1/landlords/{owner_id}/reviews",
+                headers=buyer_headers,
+                json={"rating": 4, "body": "A second review must not be accepted."},
+            ).status_code == 409
+            reviewed_profile = buyer.get(f"/api/v1/landlords/{owner_id}").json()
+            assert reviewed_profile["rating"] == 5.0
+            assert reviewed_profile["reviews_count"] == 1
+            assert reviewed_profile["reviews"][0]["author_name"] == "Test Buyer"
+            assert buyer.delete(
+                f"/api/v1/landlords/{owner_id}/reviews/{review_id}", headers=buyer_headers
+            ).status_code == 200
+
+        own_review = client.post(
+            f"/api/v1/landlords/{owner_id}/reviews",
+            headers=headers,
+            json={"rating": 5, "body": "Owners cannot review themselves here."},
+        )
+        assert own_review.status_code == 409
 
         owner_conversations = client.get("/api/v1/me/conversations")
         assert owner_conversations.status_code == 200

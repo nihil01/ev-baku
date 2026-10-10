@@ -9,7 +9,11 @@
 .landing-listings__heading>button svg,.landing-listing__more svg { width: 17px; height: 17px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .landing-listings__heading>button:hover { color: #fff; border-color: #123f34; background: #123f34; }
 .landing-listings__grid,.landing-listings__skeleton { position: relative; z-index: 1; max-width: 1500px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin: auto; }
-.landing-listing { min-width: 0; overflow: hidden; border: 1px solid rgba(18,63,52,.12); border-radius: 22px; background: #fffdf8; box-shadow: 0 13px 35px rgba(18,63,52,.08); }
+.landing-listing { position: relative; min-width: 0; overflow: hidden; border: 1px solid rgba(18,63,52,.12); border-radius: 22px; background: #fffdf8; box-shadow: 0 13px 35px rgba(18,63,52,.08); }
+.landing-listing__compare { position: absolute; z-index: 3; top: 13px; right: 13px; min-height: 42px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid rgba(255,255,255,.82); border-radius: 12px; color: #173c34; background: rgba(255,255,255,.92); box-shadow: 0 8px 25px rgba(16,63,50,.17); backdrop-filter: blur(10px); font-size: 9px; font-weight: 850; }
+.landing-listing__compare.active { color: #fff; border-color: #173c34; background: #173c34; }
+.landing-listing__compare:disabled { cursor: not-allowed; opacity: .58; }
+.landing-listing__compare svg { width: 17px; height: 17px; }
 .landing-listing__button { width: 100%; display: block; padding: 0; color: inherit; background: transparent; text-align: left; }
 .landing-listing__visual { position: relative; height: 270px; display: block; overflow: hidden; background: #dce5df; }
 .landing-listing__visual img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform .55s cubic-bezier(.22,1,.36,1); }
