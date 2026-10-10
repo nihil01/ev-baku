@@ -4,7 +4,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator, model_validator
 
-from .models import ContactMethod, Currency, District, ListingStatus, MediaType, PropertyType, UserRole
+from .models import (
+    ContactMethod,
+    Currency,
+    District,
+    ListingStatus,
+    MediaType,
+    ParkingType,
+    PropertyType,
+    ServiceFeePayer,
+    UserRole,
+)
 
 
 class UserRegister(BaseModel):
@@ -84,11 +94,14 @@ class ListingBase(BaseModel):
     has_elevator: bool = False
     has_balcony: bool = False
     has_parking: bool = False
+    parking_type: ParkingType | None = None
     has_air_conditioning: bool = False
     has_heating: bool = False
     pets_allowed: bool = False
     smoking_allowed: bool = False
     utilities_included: bool = False
+    service_fee_payer: ServiceFeePayer = ServiceFeePayer.landlord
+    monthly_service_fee: Decimal | None = Field(default=None, gt=0, le=1_000_000)
     minimum_lease_months: int = Field(default=1, ge=1, le=120)
     discount_tiers: list[DiscountTier] = Field(default_factory=list, max_length=8)
     available_from: date | None = None
@@ -99,7 +112,15 @@ class ListingBase(BaseModel):
     contact_telegram: str | None = Field(default=None, max_length=64)
     contact_whatsapp: str | None = Field(default=None, max_length=64)
 
-    @field_serializer("latitude", "longitude", "monthly_rent", "deposit", "area_sqm", when_used="json")
+    @field_serializer(
+        "latitude",
+        "longitude",
+        "monthly_rent",
+        "deposit",
+        "area_sqm",
+        "monthly_service_fee",
+        when_used="json",
+    )
     def serialize_decimals(self, value: Decimal | None) -> float | None:
         return float(value) if value is not None else None
 
@@ -119,6 +140,14 @@ class ListingBase(BaseModel):
         self.discount_tiers.sort(key=lambda tier: tier.min_months)
         if self.contact_method in {ContactMethod.phone, ContactMethod.both} and len(self.contact_phone.strip()) < 5:
             raise ValueError("A phone number is required for the selected contact method")
+        if self.parking_type is not None:
+            self.has_parking = True
+        elif not self.has_parking:
+            self.parking_type = None
+        if self.service_fee_payer == ServiceFeePayer.tenant and self.monthly_service_fee is None:
+            raise ValueError("Monthly service fee is required when the tenant pays it")
+        if self.service_fee_payer == ServiceFeePayer.landlord:
+            self.monthly_service_fee = None
         return self
 
 
@@ -148,11 +177,14 @@ class ListingUpdate(BaseModel):
     has_elevator: bool | None = None
     has_balcony: bool | None = None
     has_parking: bool | None = None
+    parking_type: ParkingType | None = None
     has_air_conditioning: bool | None = None
     has_heating: bool | None = None
     pets_allowed: bool | None = None
     smoking_allowed: bool | None = None
     utilities_included: bool | None = None
+    service_fee_payer: ServiceFeePayer | None = None
+    monthly_service_fee: Decimal | None = Field(default=None, gt=0, le=1_000_000)
     minimum_lease_months: int | None = Field(default=None, ge=1, le=120)
     discount_tiers: list[DiscountTier] | None = Field(default=None, max_length=8)
     available_from: date | None = None
@@ -241,6 +273,7 @@ class AiSearchResponse(BaseModel):
     total: int
     query: str
     mode: Literal["semantic", "text"]
+    answer: str
     guest_requests_remaining: int | None = None
     guest_request_limit: int | None = None
 

@@ -63,10 +63,24 @@ def listing_embedding_text(listing: Listing) -> str:
             (listing.has_elevator, "elevator лифт lift"),
             (listing.has_balcony, "balcony балкон balkon"),
             (listing.has_parking, "parking парковка parkinq"),
+            (listing.parking_type and listing.parking_type.value == "surface", "surface parking наземная парковка açıq parkinq"),
+            (listing.parking_type and listing.parking_type.value == "underground", "underground parking подземная парковка yeraltı parkinq"),
+            (listing.parking_type and listing.parking_type.value == "both", "surface and underground parking наземная и подземная парковка"),
             (listing.has_air_conditioning, "air conditioning кондиционер kondisioner"),
             (listing.has_heating, "heating отопление istilik"),
             (listing.pets_allowed, "pets allowed можно с животными"),
             (listing.utilities_included, "utilities included коммунальные включены"),
+            (
+                listing.service_fee_payer.value == "landlord",
+                "building service fee included landlord pays обслуживание дома оплачивает арендодатель",
+            ),
+            (
+                listing.service_fee_payer.value == "tenant",
+                (
+                    f"tenant pays building service fee monthly {listing.monthly_service_fee or ''} "
+                    "обслуживание дома оплачивает арендатор"
+                ),
+            ),
         )
         if enabled
     ]

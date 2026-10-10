@@ -26,6 +26,7 @@ from ..models import (
     ListingStatus,
     MediaType,
     PropertyType,
+    ServiceFeePayer,
 )
 from ..schemas import (
     AiSearchResponse,
@@ -174,6 +175,7 @@ async def run_ai_listing_search(
     limit: int,
     db: AsyncSession,
     *,
+    lang: str,
     guest_requests_remaining: int | None,
     guest_request_limit: int | None,
 ) -> AiSearchResponse:
@@ -235,15 +237,37 @@ async def run_ai_listing_search(
         total=len(items),
         query=query,
         mode=mode,
+        answer=ai_search_answer(query, items, mode, lang),
         guest_requests_remaining=guest_requests_remaining,
         guest_request_limit=guest_request_limit,
     )
+
+
+def ai_search_answer(query: str, items: list[ListingRead], mode: str, lang: str) -> str:
+    total = len(items)
+    if total == 0:
+        return {
+            "az": f'“{query}” sorğusuna uyğun elan tapmadım. Rayon, büdcə və ya otaq sayını dəyişərək yenidən yoxlayın.',
+            "en": f'I could not find a close match for “{query}”. Try changing the district, budget, or room count.',
+            "ru": f'По запросу «{query}» подходящих объявлений не нашлось. Попробуйте изменить район, бюджет или количество комнат.',
+        }.get(lang, f'По запросу «{query}» подходящих объявлений не нашлось.')
+
+    top = items[0]
+    if lang == "az":
+        method = "mənaca ən yaxın" if mode == "semantic" else "açar sözlərə uyğun"
+        return f'{total} elan tapdım. İlk olaraq {method} variantları göstərirəm; ən uyğun nəticə “{top.title}” oldu.'
+    if lang == "en":
+        method = "closest in meaning" if mode == "semantic" else "matching the query words"
+        return f'I found {total} homes and ranked the {method} options first. The closest match is “{top.title}”.'
+    method = "по смыслу" if mode == "semantic" else "по словам запроса"
+    return f'Нашёл {total} вариантов и сначала показал наиболее близкие {method}. Лучшее совпадение — «{top.title}».'
 
 
 @router.get("/listings/ai-search", response_model=AiSearchResponse)
 async def ai_search_listings(
     request: Request,
     q: str = Query(min_length=2, max_length=500),
+    lang: str = Query(default="ru", pattern="^(az|en|ru)$"),
     limit: int = Query(default=30, ge=1, le=100),
     auth: AuthContext | None = Depends(optional_auth),
     db: AsyncSession = Depends(get_db),
@@ -255,6 +279,7 @@ async def ai_search_listings(
         q.strip(),
         limit,
         db,
+        lang=lang,
         guest_requests_remaining=remaining,
         guest_request_limit=settings.guest_ai_request_limit if auth is None else None,
     )
@@ -285,7 +310,6 @@ async def voice_search_listings(
     if len(audio) > max_bytes:
         raise HTTPException(status_code=413, detail="The voice recording is too large")
 
-    remaining = await consume_guest_ai_request(request, auth, db, settings)
     service: TranscriptionService = request.app.state.transcription
     try:
         transcript = await service.transcribe(
@@ -299,11 +323,14 @@ async def voice_search_listings(
     if len(transcript) < 2:
         raise HTTPException(status_code=422, detail="Speech could not be recognized")
 
+    # Failed recordings/provider calls must not spend one of the guest's five searches.
+    remaining = await consume_guest_ai_request(request, auth, db, settings)
     return await run_ai_listing_search(
         request,
         transcript[:500],
         limit,
         db,
+        lang=lang,
         guest_requests_remaining=remaining,
         guest_request_limit=settings.guest_ai_request_limit if auth is None else None,
     )
@@ -397,6 +424,17 @@ async def update_listing(
         raise HTTPException(status_code=422, detail="A phone number is required for the selected contact method")
     if "contact_phone" in values:
         values["contact_phone"] = next_contact_phone
+    if "parking_type" in values:
+        values["has_parking"] = values["parking_type"] is not None
+    elif values.get("has_parking") is False:
+        values["parking_type"] = None
+
+    next_service_fee_payer = values.get("service_fee_payer", listing.service_fee_payer)
+    next_service_fee = values.get("monthly_service_fee", listing.monthly_service_fee)
+    if next_service_fee_payer == ServiceFeePayer.tenant and next_service_fee is None:
+        raise HTTPException(status_code=422, detail="Monthly service fee is required when the tenant pays it")
+    if next_service_fee_payer == ServiceFeePayer.landlord:
+        values["monthly_service_fee"] = None
     location_changed = (
         ("latitude" in values and values["latitude"] != listing.latitude)
         or ("longitude" in values and values["longitude"] != listing.longitude)

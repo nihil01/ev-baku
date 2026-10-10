@@ -10,6 +10,8 @@ export type ListingStatus = 'draft' | 'published' | 'archived'
 export type MediaType = 'image' | 'floor_plan' | 'video'
 export type Currency = 'AZN' | 'USD' | 'EUR' | 'RUB'
 export type ContactMethod = 'phone' | 'messages' | 'both'
+export type ParkingType = 'surface' | 'underground' | 'both'
+export type ServiceFeePayer = 'landlord' | 'tenant'
 export type DiscountTier = { min_months: number; discount_percent: number }
 
 export type User = {
@@ -62,11 +64,14 @@ export type Listing = {
   has_elevator: boolean
   has_balcony: boolean
   has_parking: boolean
+  parking_type: ParkingType | null
   has_air_conditioning: boolean
   has_heating: boolean
   pets_allowed: boolean
   smoking_allowed: boolean
   utilities_included: boolean
+  service_fee_payer: ServiceFeePayer
+  monthly_service_fee: number | null
   minimum_lease_months: number
   discount_tiers: DiscountTier[]
   available_from: string | null
@@ -90,6 +95,7 @@ export type AiSearchResponse = {
   total: number
   query: string
   mode: 'semantic' | 'text'
+  answer: string
   guest_requests_remaining: number | null
   guest_request_limit: number | null
 }

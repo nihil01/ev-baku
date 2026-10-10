@@ -65,6 +65,17 @@ class ContactMethod(str, enum.Enum):
     both = "both"
 
 
+class ParkingType(str, enum.Enum):
+    surface = "surface"
+    underground = "underground"
+    both = "both"
+
+
+class ServiceFeePayer(str, enum.Enum):
+    landlord = "landlord"
+    tenant = "tenant"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -142,11 +153,20 @@ class Listing(Base):
     has_elevator: Mapped[bool] = mapped_column(Boolean, default=False)
     has_balcony: Mapped[bool] = mapped_column(Boolean, default=False)
     has_parking: Mapped[bool] = mapped_column(Boolean, default=False)
+    parking_type: Mapped[ParkingType | None] = mapped_column(
+        Enum(ParkingType, native_enum=False),
+        nullable=True,
+    )
     has_air_conditioning: Mapped[bool] = mapped_column(Boolean, default=False)
     has_heating: Mapped[bool] = mapped_column(Boolean, default=False)
     pets_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     smoking_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     utilities_included: Mapped[bool] = mapped_column(Boolean, default=False)
+    service_fee_payer: Mapped[ServiceFeePayer] = mapped_column(
+        Enum(ServiceFeePayer, native_enum=False),
+        default=ServiceFeePayer.landlord,
+    )
+    monthly_service_fee: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     minimum_lease_months: Mapped[int] = mapped_column(Integer, default=1)
     available_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     nearby_places: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)

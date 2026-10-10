@@ -77,7 +77,7 @@ export default function App() {
     <header className="site-header">
       <a className="site-brand" href="#top" aria-label="ev. Baku">
         <HouseLogo className="site-logo" />
-        <span className="site-brand__wordmark"><b>EV BAKU</b><small>Rental discovery</small></span>
+        <span className="site-brand__wordmark"><b>EV BAKU</b></span>
       </a>
       <div className="site-header__actions">
         <div className="site-languages" aria-label="Language">

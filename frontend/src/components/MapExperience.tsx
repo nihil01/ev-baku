@@ -44,9 +44,9 @@ type NearbyAmenityKey = 'hospital' | 'pharmacy' | 'school' | 'university' | 'gro
 
 const currencySymbol: Record<Currency, string> = { AZN: '₼', USD: '$', EUR: '€', RUB: '₽' }
 const detailExtra = {
-  az: { nearby: 'Yaxınlıqda', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Xəritəyə qayıt', aiSearching: 'AI uyğun evləri axtarır…', aiSemantic: 'AI nəticələri', aiText: 'Mətn üzrə nəticələr', currency: 'Valyuta', discountPolicy: 'Uzunmüddətli kirayə endirimi', leaseTerm: 'Kirayə müddəti', monthlyWithDiscount: 'Endirimli aylıq qiymət', groups: { groceries: 'Marketlər', food: 'Restoran və kafelər', healthcare: 'Tibb və apteklər', education: 'Təhsil', transport: 'Metro və nəqliyyat', parks: 'Parklar', shopping: 'Ticarət mərkəzləri', services: 'Digər yerlər' } },
-  en: { nearby: 'Nearby', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Back to map', aiSearching: 'AI is matching homes…', aiSemantic: 'AI matches', aiText: 'Text matches', currency: 'Currency', discountPolicy: 'Long-stay discount', leaseTerm: 'Lease term', monthlyWithDiscount: 'Discounted monthly price', groups: { groceries: 'Groceries', food: 'Restaurants & cafés', healthcare: 'Healthcare', education: 'Education', transport: 'Metro & transport', parks: 'Parks', shopping: 'Shopping centres', services: 'Other places' } },
-  ru: { nearby: 'Рядом с домом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp', backToMap: 'Вернуться к карте', aiSearching: 'AI подбирает подходящие квартиры…', aiSemantic: 'AI-подборка', aiText: 'Поиск по тексту', currency: 'Валюта', discountPolicy: 'Скидка за длительную аренду', leaseTerm: 'Срок аренды', monthlyWithDiscount: 'Цена в месяц со скидкой', groups: { groceries: 'Магазины', food: 'Рестораны и кафе', healthcare: 'Медицина и аптеки', education: 'Образование', transport: 'Метро и транспорт', parks: 'Парки', shopping: 'Торговые центры', services: 'Другие места' } },
+  az: { nearby: 'Yaxınlıqda', distance: 'm', chat: 'Sahibinə yaz', send: 'Göndər', message: 'Mesajınız', owner: 'Elan sahibi', loginChat: 'Mesaj üçün hesaba daxil olun', converted: 'AZN ilə', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Xəritəyə qayıt', aiSearching: 'AI uyğun evləri axtarır…', aiSemantic: 'AI nəticələri', aiText: 'Mətn üzrə nəticələr', aiAnswer: 'AI cavabı', currency: 'Valyuta', discountPolicy: 'Uzunmüddətli kirayə endirimi', leaseTerm: 'Kirayə müddəti', monthlyWithDiscount: 'Endirimli aylıq qiymət', groups: { groceries: 'Marketlər', food: 'Restoran və kafelər', healthcare: 'Tibb və apteklər', education: 'Təhsil', transport: 'Metro və nəqliyyat', parks: 'Parklar', shopping: 'Ticarət mərkəzləri', services: 'Digər yerlər' } },
+  en: { nearby: 'Nearby', distance: 'm', chat: 'Message owner', send: 'Send', message: 'Your message', owner: 'Property owner', loginChat: 'Sign in to send a message', converted: 'in AZN', telegram: 'Telegram', whatsapp: 'WhatsApp', backToMap: 'Back to map', aiSearching: 'AI is matching homes…', aiSemantic: 'AI matches', aiText: 'Text matches', aiAnswer: 'AI answer', currency: 'Currency', discountPolicy: 'Long-stay discount', leaseTerm: 'Lease term', monthlyWithDiscount: 'Discounted monthly price', groups: { groceries: 'Groceries', food: 'Restaurants & cafés', healthcare: 'Healthcare', education: 'Education', transport: 'Metro & transport', parks: 'Parks', shopping: 'Shopping centres', services: 'Other places' } },
+  ru: { nearby: 'Рядом с домом', distance: 'м', chat: 'Написать владельцу', send: 'Отправить', message: 'Ваше сообщение', owner: 'Владелец объявления', loginChat: 'Войдите, чтобы написать', converted: 'в AZN', telegram: 'Телеграм', whatsapp: 'WhatsApp', backToMap: 'Вернуться к карте', aiSearching: 'AI подбирает подходящие квартиры…', aiSemantic: 'AI-подборка', aiText: 'Поиск по тексту', aiAnswer: 'Ответ AI', currency: 'Валюта', discountPolicy: 'Скидка за длительную аренду', leaseTerm: 'Срок аренды', monthlyWithDiscount: 'Цена в месяц со скидкой', groups: { groceries: 'Магазины', food: 'Рестораны и кафе', healthcare: 'Медицина и аптеки', education: 'Образование', transport: 'Метро и транспорт', parks: 'Парки', shopping: 'Торговые центры', services: 'Другие места' } },
 } as const
 
 const contactPrivacyCopy = {
@@ -56,9 +56,15 @@ const contactPrivacyCopy = {
 } as const
 
 const nearbyCopy = {
-  az: { infrastructure: 'Vacib yerlər yaxınlıqda', description: 'Evdən 1,6 km radiusda gündəlik həyat üçün əsas məkanlar.', notNearby: '1,6 km radiusda tapılmadı', loading: 'Yaxınlıqdakı yerlər axtarılır…', empty: 'Bu ünvana yaxın yerlər tapılmadı.', retry: 'Yenidən yoxla', found: 'yer tapıldı', amenities: { hospital: 'Xəstəxana və klinika', pharmacy: 'Aptek', school: 'Məktəb', university: 'Universitet', groceries: 'Market', shopping: 'Ticarət mərkəzi', restaurant: 'Restoran və kafe', transport: 'Metro və dayanacaq', park: 'Park və istirahət' } },
-  en: { infrastructure: 'Important places nearby', description: 'Everyday essentials within 1.6 km of the home.', notNearby: 'Not found within 1.6 km', loading: 'Finding places nearby…', empty: 'No nearby places were found for this address.', retry: 'Try again', found: 'places found', amenities: { hospital: 'Hospital & clinic', pharmacy: 'Pharmacy', school: 'School', university: 'University', groceries: 'Grocery store', shopping: 'Shopping centre', restaurant: 'Restaurant & café', transport: 'Metro & bus stop', park: 'Park & leisure' } },
-  ru: { infrastructure: 'Важные места рядом', description: 'Всё необходимое для жизни в радиусе 1,6 км от дома.', notNearby: 'Не найдено в радиусе 1,6 км', loading: 'Ищем места поблизости…', empty: 'Рядом с этим адресом места пока не найдены.', retry: 'Попробовать снова', found: 'мест найдено', amenities: { hospital: 'Больница и клиника', pharmacy: 'Аптека', school: 'Школа', university: 'Университет', groceries: 'Продуктовый магазин', shopping: 'Торговый центр', restaurant: 'Ресторан и кафе', transport: 'Метро и остановка', park: 'Парк и отдых' } },
+  az: { infrastructure: 'Yaxınlıqdakı yerlər', description: 'Evdən 1,6 km radiusda gündəlik həyat üçün əsas məkanlar.', notNearby: '1,6 km radiusda tapılmadı', loading: 'Yaxınlıqdakı yerlər axtarılır…', empty: 'Bu ünvana yaxın yerlər tapılmadı.', retry: 'Yenidən yoxla', found: 'yer tapıldı', amenities: { hospital: 'Xəstəxana və klinika', pharmacy: 'Aptek', school: 'Məktəb', university: 'Universitet', groceries: 'Market', shopping: 'Ticarət mərkəzi', restaurant: 'Restoran və kafe', transport: 'Metro və dayanacaq', park: 'Park və istirahət' } },
+  en: { infrastructure: 'Places nearby', description: 'Everyday essentials within 1.6 km of the home.', notNearby: 'Not found within 1.6 km', loading: 'Finding places nearby…', empty: 'No nearby places were found for this address.', retry: 'Try again', found: 'places found', amenities: { hospital: 'Hospital & clinic', pharmacy: 'Pharmacy', school: 'School', university: 'University', groceries: 'Grocery store', shopping: 'Shopping centre', restaurant: 'Restaurant & café', transport: 'Metro & bus stop', park: 'Park & leisure' } },
+  ru: { infrastructure: 'Места рядом', description: 'Всё необходимое для жизни в радиусе 1,6 км от дома.', notNearby: 'Не найдено в радиусе 1,6 км', loading: 'Ищем места поблизости…', empty: 'Рядом с этим адресом места пока не найдены.', retry: 'Попробовать снова', found: 'мест найдено', amenities: { hospital: 'Больница и клиника', pharmacy: 'Аптека', school: 'Школа', university: 'Университет', groceries: 'Продуктовый магазин', shopping: 'Торговый центр', restaurant: 'Ресторан и кафе', transport: 'Метро и остановка', park: 'Парк и отдых' } },
+} as const
+
+const listingCostsCopy = {
+  az: { parking: { surface: 'Yerüstü park', underground: 'Yeraltı park', both: 'Yerüstü və yeraltı park' }, parkingUnknown: 'Parkinq · növ göstərilməyib', serviceTitle: 'Aylıq bina xidmətləri', landlordPays: 'Ev sahibi ödəyir · kirayəyə daxildir', tenantPays: 'Kirayəçi ödəyir' },
+  en: { parking: { surface: 'Surface parking', underground: 'Underground parking', both: 'Surface and underground parking' }, parkingUnknown: 'Parking · type not specified', serviceTitle: 'Monthly building services', landlordPays: 'Landlord pays · included for tenant', tenantPays: 'Tenant pays' },
+  ru: { parking: { surface: 'Наземная парковка', underground: 'Подземная парковка', both: 'Наземная и подземная парковка' }, parkingUnknown: 'Парковка · тип не указан', serviceTitle: 'Ежемесячные услуги дома', landlordPays: 'Платит арендодатель · включено', tenantPays: 'Платит арендатор' },
 } as const
 
 const availabilityCopy = {
@@ -305,6 +311,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   const x = detailExtra[lang]
   const nearbyText = nearbyCopy[lang]
   const availabilityText = availabilityCopy[lang]
+  const listingCosts = listingCostsCopy[lang]
   const { user } = useAuth()
   const mapRef = useRef<MapRef | null>(null)
   const cardRefs = useRef<Record<string, HTMLElement | null>>({})
@@ -316,6 +323,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   const [query, setQuery] = useState('')
   const [aiResults, setAiResults] = useState<Listing[] | null>(null)
   const [aiMode, setAiMode] = useState<'semantic' | 'text' | null>(null)
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
   const [guestQuota, setGuestQuota] = useState<{ remaining: number; limit: number } | null>(null)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>(() => (localStorage.getItem('ev-currency') as Currency) || 'AZN')
@@ -373,12 +381,13 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
     if (!clean) return
     setAiBusy(true); setQuery(clean)
     try {
-      const result = await api.aiSearch(clean)
+      const result = await api.aiSearch(clean, lang)
       setAiResults(result.items); setAiMode(result.mode); setListingsError(''); setToastError('')
+      setAiAnswer(result.answer)
       setGuestQuota(result.guest_requests_remaining === null || result.guest_request_limit === null ? null : { remaining: result.guest_requests_remaining, limit: result.guest_request_limit })
     } catch (error) {
       const message = error instanceof ApiError && error.status === 429 ? guestSearchCopy[lang].limit : error instanceof Error ? error.message : 'AI search unavailable'
-      setAiResults([]); setAiMode(null); setListingsError(message); setToastError(message)
+      setAiResults([]); setAiMode(null); setAiAnswer(null); setListingsError(message); setToastError(message)
     } finally { setAiBusy(false) }
   }, [lang])
 
@@ -387,6 +396,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
       setQuery(initialAiResults.query)
       setAiResults(initialAiResults.items)
       setAiMode(initialAiResults.mode)
+      setAiAnswer(initialAiResults.answer)
       setGuestQuota(initialAiResults.guest_requests_remaining === null || initialAiResults.guest_request_limit === null ? null : { remaining: initialAiResults.guest_requests_remaining, limit: initialAiResults.guest_request_limit })
       return
     }
@@ -576,7 +586,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
 
   const clearFilters = () => {
     setQuery('')
-    setAiResults(null); setAiMode(null)
+    setAiResults(null); setAiMode(null); setAiAnswer(null)
     setDistrict('all')
     setPropertyType('all')
     setRoomCount('all')
@@ -711,11 +721,14 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
     }
   }, [detailPhotos.length, photoZoomed])
   const isUnavailable = Boolean(detailListing?.available_from && detailListing.available_from > localDateKey())
+  const parkingFeatureLabel = detailListing?.has_parking
+    ? detailListing.parking_type ? listingCosts.parking[detailListing.parking_type] : listingCosts.parkingUnknown
+    : t.parking
   const featureItems = detailListing ? [
     [t.furnished, detailListing.furnished],
     [t.elevator, detailListing.has_elevator],
     [t.balcony, detailListing.has_balcony],
-    [t.parking, detailListing.has_parking],
+    [parkingFeatureLabel, detailListing.has_parking],
     [t.ac, detailListing.has_air_conditioning],
     [t.heating, detailListing.has_heating],
     [t.utilities, detailListing.utilities_included],
@@ -884,6 +897,12 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
           </select></label>
         </div>
 
+        <AnimatePresence initial={false}>
+          {aiAnswer && !aiBusy && <motion.aside className="ai-search-answer" role="status" aria-live="polite" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
+            <span aria-hidden="true">✦</span><div><b>{x.aiAnswer}</b><p>{aiAnswer}</p></div>
+          </motion.aside>}
+        </AnimatePresence>
+
         {listingsLoading ? <div className="results-loading"><BrandedLoader compact label={lang === 'ru' ? 'Подбираем объявления…' : lang === 'az' ? 'Elanlar seçilir…' : 'Finding homes…'} /></div> : visibleResults.length ? <div className="listing-grid">
           {visibleResults.map((listing) => {
             const cover = coverFor(listing)
@@ -974,6 +993,8 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
                 <div><span>{t.deposit}</span><b>{detailListing.deposit ? `${money(Number(detailListing.deposit))} ${currencySymbol[detailListing.rent_currency]}` : t.noDeposit}</b></div>
                 <div className="wide"><span>{t.availableFrom}</span><b>{localizedDate(detailListing.available_from, lang, t.notSpecified)}</b></div>
               </div></section>
+
+              <section className="modal-detail-section monthly-service-summary"><h3>{listingCosts.serviceTitle}</h3><div><i aria-hidden="true">✓</i><span><b>{detailListing.service_fee_payer === 'landlord' ? listingCosts.landlordPays : listingCosts.tenantPays}</b>{detailListing.service_fee_payer === 'tenant' && detailListing.monthly_service_fee && <small>{money(Number(detailListing.monthly_service_fee))} {currencySymbol[detailListing.rent_currency]} {t.month}</small>}</span></div></section>
 
               {detailListing.discount_tiers.length > 0 && <section className="modal-detail-section lease-discount"><h3>{x.discountPolicy}</h3>
                 <div className="lease-discount__controls"><label><span>{x.leaseTerm}</span><select value={leaseMonths} onChange={(event) => setLeaseMonths(Number(event.target.value))}>{Array.from({ length: Math.max(36, ...detailListing.discount_tiers.map((tier) => tier.min_months)) }, (_, index) => index + 1).filter((months) => months >= detailListing.minimum_lease_months).map((months) => <option key={months} value={months}>{months} {t.months}</option>)}</select></label>

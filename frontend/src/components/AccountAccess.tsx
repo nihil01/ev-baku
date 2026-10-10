@@ -21,7 +21,9 @@ import type {
   ListingMedia,
   ListingPayload,
   MediaType,
+  ParkingType,
   PropertyType,
+  ServiceFeePayer,
 } from '../types/api'
 import './AccountAccess.css'
 
@@ -31,7 +33,6 @@ type ListingBooleanField =
   | 'furnished'
   | 'has_elevator'
   | 'has_balcony'
-  | 'has_parking'
   | 'has_air_conditioning'
   | 'has_heating'
   | 'pets_allowed'
@@ -69,6 +70,21 @@ const mediaEditorCopy = {
   ru: { title: 'Фотографии и медиа', editHint: 'Управляйте текущими файлами и добавляйте новые ниже. Новые файлы загрузятся при сохранении изменений.', createHint: 'Выберите фотографии квартиры, планировки и видео.', selected: 'Выбраны новые файлы', pending: 'Загрузятся после сохранения', remove: 'Убрать из выбранных' },
 } as const
 
+const propertyCostsCopy = {
+  az: {
+    parkingTitle: 'Parkinq növü', parkingHint: 'Elana uyğun park yeri variantını seçin.', noParking: 'Parkinq yoxdur', surface: 'Yerüstü', underground: 'Yeraltı', bothParking: 'Hər ikisi',
+    serviceTitle: 'Aylıq bina xidmətləri', serviceHint: 'Zibilin çıxarılması, lift, mühafizə və binanın ümumi xidməti.', landlord: 'Ev sahibi ödəyir', landlordHint: 'Kirayəçi üçün əlavə aylıq ödəniş yoxdur.', tenant: 'Kirayəçi ödəyir', tenantHint: 'Aylıq xidmət haqqını aşağıda göstərin.', serviceFee: 'Aylıq xidmət haqqı', feeCurrency: 'Məbləğ kirayə valyutasında göstərilir.', feeRequired: 'Kirayəçi ödəyirsə, aylıq xidmət haqqını göstərin.',
+  },
+  en: {
+    parkingTitle: 'Parking type', parkingHint: 'Choose the parking option available for this home.', noParking: 'No parking', surface: 'Surface', underground: 'Underground', bothParking: 'Both types',
+    serviceTitle: 'Monthly building services', serviceHint: 'Waste collection, lifts, security, and shared building maintenance.', landlord: 'Landlord pays', landlordHint: 'There is no extra monthly charge for the tenant.', tenant: 'Tenant pays', tenantHint: 'Enter the monthly service charge below.', serviceFee: 'Monthly service charge', feeCurrency: 'The amount uses the rent currency.', feeRequired: 'Enter the monthly service charge when the tenant pays it.',
+  },
+  ru: {
+    parkingTitle: 'Тип парковки', parkingHint: 'Укажите, какая парковка доступна жильцу.', noParking: 'Нет парковки', surface: 'Наземная', underground: 'Подземная', bothParking: 'Оба варианта',
+    serviceTitle: 'Ежемесячные услуги дома', serviceHint: 'Вывоз мусора, лифты, охрана и обслуживание общих зон.', landlord: 'Платит арендодатель', landlordHint: 'Для арендатора дополнительной ежемесячной оплаты нет.', tenant: 'Платит арендатор', tenantHint: 'Ниже обязательно укажите ежемесячную стоимость.', serviceFee: 'Стоимость услуг в месяц', feeCurrency: 'Сумма указывается в валюте аренды.', feeRequired: 'Укажите стоимость ежемесячных услуг, если их оплачивает арендатор.',
+  },
+} as const
+
 function emptyListing(userName = '', phone = '', telegram = '', whatsapp = '', showName = true): ListingPayload {
   const [longitude, latitude] = districtCenter('yasamal')
   return {
@@ -77,8 +93,8 @@ function emptyListing(userName = '', phone = '', telegram = '', whatsapp = '', s
     rent_currency: 'AZN',
     deposit: null, area_sqm: 0, rooms: 2, bedrooms: 1, bathrooms: 1, max_guests: 2,
     furnished: true, floor: null, total_floors: null, has_elevator: false, has_balcony: false,
-    has_parking: false, has_air_conditioning: false, has_heating: false, pets_allowed: false,
-    smoking_allowed: false, utilities_included: false, minimum_lease_months: 1,
+    has_parking: false, parking_type: null, has_air_conditioning: false, has_heating: false, pets_allowed: false,
+    smoking_allowed: false, utilities_included: false, service_fee_payer: 'landlord', monthly_service_fee: null, minimum_lease_months: 1,
     discount_tiers: [],
     available_from: null, contact_name: userName, contact_phone: phone, contact_method: 'both', show_contact_name: showName,
     contact_telegram: telegram || null, contact_whatsapp: whatsapp || null,
@@ -176,6 +192,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const t = text[lang]
   const x = extra[lang]
   const mediaText = mediaEditorCopy[lang]
+  const propertyCosts = propertyCostsCopy[lang]
   const [tab, setTab] = useState<DashboardTab>('list')
   const [listings, setListings] = useState<Listing[]>([])
   const [refresh, setRefresh] = useState(0)
@@ -211,6 +228,16 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   const field = (name: keyof ListingPayload, value: unknown) => setForm((current) => ({ ...current, [name]: value }))
   const setBooleanField = (name: ListingBooleanField, checked: boolean) => {
     setForm((current) => current[name] === checked ? current : { ...current, [name]: checked })
+  }
+  const setParkingType = (parkingType: ParkingType | null) => {
+    setForm((current) => ({ ...current, parking_type: parkingType, has_parking: parkingType !== null }))
+  }
+  const setServiceFeePayer = (payer: ServiceFeePayer) => {
+    setForm((current) => ({
+      ...current,
+      service_fee_payer: payer,
+      monthly_service_fee: payer === 'landlord' ? null : current.monthly_service_fee,
+    }))
   }
   const changeDistrict = (value: DistrictId) => {
     const [longitude, latitude] = districtCenter(value)
@@ -267,6 +294,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
     try {
       const hasPhoto = existingMedia.some((item) => item.media_type === 'image') || photos.length > 0
       if (((!editing && publishNow) || editing?.status === 'published') && !hasPhoto) throw new Error(t.atLeastPhoto)
+      if (form.service_fee_payer === 'tenant' && (!form.monthly_service_fee || form.monthly_service_fee <= 0)) throw new Error(propertyCosts.feeRequired)
 
       const saved = editing ? await api.updateListing(editing.id, form) : await api.createListing(form)
       await uploadNewMedia(saved.id)
@@ -384,7 +412,7 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           </section>
           <section><h3>{t.coordinates}</h3><LocationPicker lang={lang} latitude={Number(form.latitude)} longitude={Number(form.longitude)} onChange={changeLocation} /></section>
           <section><h3>{t.amenities}</h3><div className="check-grid">{([
-            ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_parking', t.parking], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
+            ['furnished', t.furnished], ['has_elevator', t.elevator], ['has_balcony', t.balcony], ['has_air_conditioning', t.ac], ['has_heating', t.heating], ['pets_allowed', t.pets], ['smoking_allowed', t.smoking], ['utilities_included', t.utilities],
           ] as [ListingBooleanField, string][]).map(([name, label]) => {
             const selected = form[name]
             return <button
@@ -394,7 +422,16 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
               aria-pressed={selected}
               onClick={() => setBooleanField(name, !selected)}
             ><span aria-hidden="true" />{label}</button>
-          })}</div></section>
+          })}</div>
+            <div className="property-option-group"><div className="property-option-group__heading"><b>{propertyCosts.parkingTitle}</b><p>{propertyCosts.parkingHint}</p></div><div className="property-choice-grid parking-choices">{([
+              [null, propertyCosts.noParking], ['surface', propertyCosts.surface], ['underground', propertyCosts.underground], ['both', propertyCosts.bothParking],
+            ] as [ParkingType | null, string][]).map(([value, label]) => <button type="button" key={value || 'none'} className={form.parking_type === value ? 'active' : ''} aria-pressed={form.parking_type === value} onClick={() => setParkingType(value)}><i aria-hidden="true">{form.parking_type === value ? '✓' : ''}</i><span>{label}</span></button>)}</div></div>
+            <div className="property-option-group service-fee-group"><div className="property-option-group__heading"><b>{propertyCosts.serviceTitle}</b><p>{propertyCosts.serviceHint}</p></div><div className="property-choice-grid">{([
+              ['landlord', propertyCosts.landlord, propertyCosts.landlordHint], ['tenant', propertyCosts.tenant, propertyCosts.tenantHint],
+            ] as [ServiceFeePayer, string, string][]).map(([value, label, hint]) => <button type="button" key={value} className={form.service_fee_payer === value ? 'active' : ''} aria-pressed={form.service_fee_payer === value} onClick={() => setServiceFeePayer(value)}><i aria-hidden="true">{form.service_fee_payer === value ? '✓' : ''}</i><span><b>{label}</b><small>{hint}</small></span></button>)}</div>
+              {form.service_fee_payer === 'tenant' && <div className="service-fee-input"><NumberField label={`${propertyCosts.serviceFee}, ${form.rent_currency}`} value={form.monthly_service_fee || 0} onChange={(value) => field('monthly_service_fee', value || null)} required step="0.01" /><small>{propertyCosts.feeCurrency}</small></div>}
+            </div>
+          </section>
           <section className="media-editor">
             <header className="media-editor__heading"><div><h3>{mediaText.title}</h3><p>{editing ? mediaText.editHint : mediaText.createHint}</p></div>{editing && <strong>{existingMedia.length}</strong>}</header>
             {editing && <MediaManager media={existingMedia} t={t} onCover={makeCover} onRemove={removeMedia} />}

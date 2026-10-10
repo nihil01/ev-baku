@@ -58,6 +58,16 @@ async def _migrate_postgresql(connection) -> None:
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS "
         "nearby_cache_version INTEGER NOT NULL DEFAULT 0"
     ))
+    await connection.execute(text(
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS parking_type VARCHAR(20)"
+    ))
+    await connection.execute(text(
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS "
+        "service_fee_payer VARCHAR(20) NOT NULL DEFAULT 'landlord'"
+    ))
+    await connection.execute(text(
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS monthly_service_fee NUMERIC(12, 2)"
+    ))
 
 
 async def _migrate_sqlite(connection) -> None:
@@ -78,6 +88,9 @@ async def _migrate_sqlite(connection) -> None:
             "nearby_places": "JSON",
             "nearby_updated_at": "DATETIME",
             "nearby_cache_version": "INTEGER NOT NULL DEFAULT 0",
+            "parking_type": "VARCHAR(20)",
+            "service_fee_payer": "VARCHAR(20) NOT NULL DEFAULT 'landlord'",
+            "monthly_service_fee": "NUMERIC(12, 2)",
         },
     }
     for table, columns in additions.items():

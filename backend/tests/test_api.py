@@ -56,6 +56,7 @@ from PIL import Image, ImageChops
 from app.external import PLACE_CATEGORIES
 from app.main import app
 from app.models import District
+from app.speech import TranscriptionError
 from app.storage import add_watermark
 
 LISTING = {
@@ -78,12 +79,15 @@ LISTING = {
     "total_floors": 16,
     "has_elevator": True,
     "has_balcony": True,
-    "has_parking": False,
+    "has_parking": True,
+    "parking_type": "underground",
     "has_air_conditioning": True,
     "has_heating": True,
     "pets_allowed": False,
     "smoking_allowed": False,
     "utilities_included": False,
+    "service_fee_payer": "tenant",
+    "monthly_service_fee": 75,
     "minimum_lease_months": 6,
     "discount_tiers": [
         {"min_months": 6, "discount_percent": 5},
@@ -218,8 +222,33 @@ def test_user_listing_media_publish_flow():
         assert created.json()["nearby_updated_at"] is not None
         assert fake_geoapify.nearby_calls == 1
         assert created.json()["discount_tiers"][1] == {"min_months": 12, "discount_percent": 10.0}
+        assert created.json()["parking_type"] == "underground"
+        assert created.json()["service_fee_payer"] == "tenant"
+        assert created.json()["monthly_service_fee"] == 75.0
         assert client.post("/api/v1/listings", json=LISTING).status_code == 403
         assert client.post(f"/api/v1/listings/{listing_id}/publish", headers=headers).status_code == 422
+
+        landlord_services = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={"service_fee_payer": "landlord", "parking_type": "surface"},
+            headers=headers,
+        )
+        assert landlord_services.status_code == 200, landlord_services.text
+        assert landlord_services.json()["monthly_service_fee"] is None
+        assert landlord_services.json()["parking_type"] == "surface"
+        missing_tenant_fee = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={"service_fee_payer": "tenant"},
+            headers=headers,
+        )
+        assert missing_tenant_fee.status_code == 422
+        tenant_services = client.patch(
+            f"/api/v1/listings/{listing_id}",
+            json={"service_fee_payer": "tenant", "monthly_service_fee": 80},
+            headers=headers,
+        )
+        assert tenant_services.status_code == 200, tenant_services.text
+        assert tenant_services.json()["monthly_service_fee"] == 80.0
 
         updated = client.patch(
             f"/api/v1/listings/{listing_id}", json={"title": "Updated Baku rental apartment"}, headers=headers
@@ -336,6 +365,7 @@ def test_user_listing_media_publish_flow():
         ai_results = client.get("/api/v1/listings/ai-search?q=balcony%20yasamal")
         assert ai_results.status_code == 200, ai_results.text
         assert ai_results.json()["mode"] == "text"
+        assert ai_results.json()["answer"]
         assert ai_results.json()["items"][0]["id"] == listing_id
 
         nearby = client.get(f"/api/v1/listings/{listing_id}/nearby?radius=1000&lang=en")
@@ -425,6 +455,10 @@ def test_guest_ai_search_is_locked_after_five_requests_but_authenticated_users_b
 
 
 def test_voice_search_transcribes_audio_and_counts_as_one_guest_request():
+    class FailingTranscription:
+        async def transcribe(self, audio, **kwargs):
+            raise TranscriptionError("Voice transcription provider is temporarily unavailable")
+
     class FakeTranscription:
         async def transcribe(self, audio, **kwargs):
             assert audio == b"fake-opus-audio"
@@ -433,6 +467,14 @@ def test_voice_search_transcribes_audio_and_counts_as_one_guest_request():
             return "квартира с балконом в Ясамале"
 
     with TestClient(app, client=("203.0.113.42", 5042)) as client:
+        app.state.transcription = FailingTranscription()
+        failed = client.post(
+            "/api/v1/listings/voice-search",
+            data={"lang": "ru"},
+            files={"file": ("voice.webm", b"fake-opus-audio", "audio/webm;codecs=opus")},
+        )
+        assert failed.status_code == 503
+
         app.state.transcription = FakeTranscription()
         response = client.post(
             "/api/v1/listings/voice-search",
@@ -441,4 +483,5 @@ def test_voice_search_transcribes_audio_and_counts_as_one_guest_request():
         )
         assert response.status_code == 200, response.text
         assert response.json()["query"] == "квартира с балконом в Ясамале"
+        assert response.json()["answer"]
         assert response.json()["guest_requests_remaining"] == 4

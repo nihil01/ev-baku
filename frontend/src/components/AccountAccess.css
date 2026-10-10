@@ -94,6 +94,22 @@
 .check-grid button>span,.form-submit label span { position: relative; width: 18px; height: 18px; flex: 0 0 auto; border: 1px solid #afbeb6; border-radius: 5px; background: #fff; }
 .check-grid button.active>span { border-color: #173c34; background: #173c34; }
 .check-grid button.active>span::after { content: ''; position: absolute; width: 7px; height: 4px; left: 4px; top: 4px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.property-option-group { margin-top: 18px; padding-top: 17px; border-top: 1px solid #e4e9e4; }
+.property-option-group__heading { margin-bottom: 11px; }
+.property-option-group__heading b { display: block; color: #254e40; font-size: 12px; }
+.property-option-group__heading p { margin: 4px 0 0; color: #71847c; font-size: 10px; line-height: 1.5; }
+.property-choice-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.property-choice-grid.parking-choices { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.property-choice-grid>button { min-height: 62px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #d9e2da; border-radius: 11px; color: #536a61; background: #f8faf7; text-align: left; transition: border-color .18s,background .18s,box-shadow .18s; }
+.property-choice-grid>button:hover { border-color: #a5b9ae; background: #f2f7f3; }
+.property-choice-grid>button:focus-visible { outline: 3px solid rgba(75,140,112,.2); outline-offset: 2px; }
+.property-choice-grid>button.active { color: #173c34; border-color: #3d8068; background: #edf6f0; box-shadow: inset 0 0 0 1px #3d8068; }
+.property-choice-grid>button>i { width: 22px; height: 22px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #c7d3cb; border-radius: 50%; color: transparent; background: #fff; font-size: 10px; font-style: normal; }
+.property-choice-grid>button.active>i { color: #fff; border-color: #237156; background: #237156; }
+.property-choice-grid>button>span { min-width: 0; display: grid; gap: 3px; font-size: 11px; font-weight: 750; }
+.property-choice-grid>button small { color: #778a82; font-size: 9px; font-weight: 500; line-height: 1.35; }
+.service-fee-input { display: grid; grid-template-columns: minmax(0,1fr) minmax(170px,.7fr); align-items: end; gap: 12px; margin-top: 11px; padding: 12px; border: 1px solid #cfe0d5; border-radius: 11px; background: #f0f7f2; }
+.service-fee-input>small { padding-bottom: 10px; color: #5f796e; font-size: 9px; line-height: 1.45; }
 .form-submit label { min-height: 39px; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #dfe5df; border-radius: 9px; color: #52685f; background: #f8faf7; cursor: pointer; }
 .form-submit input { position: absolute; width: 1px; min-height: 1px; opacity: 0; }
 .form-submit input:checked+span { border-color: #173c34; background: #173c34; box-shadow: inset 0 0 0 4px #fff; }
@@ -185,7 +201,9 @@
   .dashboard>main { padding: 13px; }
   .dashboard-list article { grid-template-columns: 105px 1fr; }
   .dashboard-list article>img,.dashboard-placeholder { width: 105px; }
-  .form-grid,.check-grid,.media-inputs,.existing-media__grid { grid-template-columns: 1fr; }
+  .form-grid,.check-grid,.media-inputs,.existing-media__grid,.property-choice-grid,.property-choice-grid.parking-choices { grid-template-columns: 1fr; }
+  .service-fee-input { grid-template-columns: 1fr; }
+  .service-fee-input>small { padding-bottom: 0; }
   .listing-form>section { padding: 15px; }
   .form-submit { bottom: -13px; margin: 0 -13px -13px; padding: 12px 13px; }
   .form-submit label { display: none; }

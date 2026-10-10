@@ -28,11 +28,14 @@ def listing_to_dict(listing: Listing, *, redact_private_contact: bool = True) ->
         "has_elevator": listing.has_elevator,
         "has_balcony": listing.has_balcony,
         "has_parking": listing.has_parking,
+        "parking_type": listing.parking_type,
         "has_air_conditioning": listing.has_air_conditioning,
         "has_heating": listing.has_heating,
         "pets_allowed": listing.pets_allowed,
         "smoking_allowed": listing.smoking_allowed,
         "utilities_included": listing.utilities_included,
+        "service_fee_payer": listing.service_fee_payer,
+        "monthly_service_fee": listing.monthly_service_fee,
         "minimum_lease_months": listing.minimum_lease_months,
         "discount_tiers": [
             {
