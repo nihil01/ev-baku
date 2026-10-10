@@ -9,6 +9,7 @@ type Point = { x: number; y: number }
 type Props = {
   lang: Lang
   onExplore: (origin: Point) => void
+  onListingOpen: (listingId: string, origin: Point) => void
 }
 
 const copy = {
@@ -32,7 +33,7 @@ function origin(element: HTMLElement): Point {
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
 }
 
-export default function LandingListings({ lang, onExplore }: Props) {
+export default function LandingListings({ lang, onExplore, onListingOpen }: Props) {
   const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -64,7 +65,11 @@ export default function LandingListings({ lang, onExplore }: Props) {
       {listings.map((listing, index) => {
         const cover = listing.media.find((item) => item.is_cover && item.media_type === 'image') || listing.media.find((item) => item.media_type === 'image')
         return <motion.article key={listing.id} className={`landing-listing${index === 0 ? ' landing-listing--featured' : ''}`} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: .15 }} transition={{ delay: Math.min(index * .045, .2), duration: .42 }}>
-          <a className="landing-listing__button" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer" aria-label={`${t.details}: ${listing.title}`}>
+          <a className="landing-listing__button" href={listingUrl(listing.id)} onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+            event.preventDefault()
+            onListingOpen(listing.id, origin(event.currentTarget))
+          }} aria-label={`${t.details}: ${listing.title}`}>
             <span className="landing-listing__visual">
               {cover ? <img src={mediaUrl(cover.url)} alt="" loading="lazy" decoding="async" /> : <HomePlaceholder />}
               <span className="landing-listing__district">{districtLabel(listing.district, lang)}</span>

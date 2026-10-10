@@ -99,6 +99,7 @@ export function mediaUrl(url: string) {
 
 export function listingUrl(listingId: string) {
   const url = new URL(import.meta.env.BASE_URL || '/', window.location.origin)
+  url.searchParams.set('view', 'map')
   url.searchParams.set('listing', listingId)
   return url.toString()
 }

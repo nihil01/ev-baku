@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { api, listingUrl, mediaUrl } from '../lib/api'
@@ -28,7 +28,7 @@ import type {
 } from '../types/api'
 import './AccountAccess.css'
 
-type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void; onOverlayChange?: (open: boolean) => void }
+type Props = { lang: Lang; compact?: boolean; onListingsChanged?: () => void; onOverlayChange?: (open: boolean) => void; onOpenListing?: (listingId: string) => void }
 type DashboardTab = 'list' | 'new' | 'edit' | 'favorites' | 'chat' | 'profile'
 type ListingBooleanField =
   | 'furnished'
@@ -140,7 +140,7 @@ function listingPayload(listing: Listing): ListingPayload {
   return { ...payload, contact_phone: contact_phone || '' }
 }
 
-export default function AccountAccess({ lang, compact = false, onListingsChanged, onOverlayChange }: Props) {
+export default function AccountAccess({ lang, compact = false, onListingsChanged, onOverlayChange, onOpenListing }: Props) {
   const { user, loading, login, register, logout } = useAuth()
   const [authOpen, setAuthOpen] = useState(false)
   const [dashboardOpen, setDashboardOpen] = useState(false)
@@ -154,7 +154,7 @@ export default function AccountAccess({ lang, compact = false, onListingsChanged
   if (loading) return <span className="account-loading" role="status" aria-label={t.saving} />
   const overlay = <AnimatePresence initial={false}>
     {authOpen && <AuthModal lang={lang} onClose={() => setAuthOpen(false)} login={login} register={register} onSuccess={() => { setAuthOpen(false); setDashboardOpen(true) }} />}
-    {dashboardOpen && user && <UiErrorBoundary lang={lang} onClose={() => setDashboardOpen(false)}><Dashboard lang={lang} onClose={() => setDashboardOpen(false)} onLogout={async () => { await logout(); setDashboardOpen(false) }} onListingsChanged={onListingsChanged} /></UiErrorBoundary>}
+    {dashboardOpen && user && <UiErrorBoundary lang={lang} onClose={() => setDashboardOpen(false)}><Dashboard lang={lang} onClose={() => setDashboardOpen(false)} onLogout={async () => { await logout(); setDashboardOpen(false) }} onListingsChanged={onListingsChanged} onOpenListing={onOpenListing} /></UiErrorBoundary>}
   </AnimatePresence>
   const displayName = user?.full_name.trim().split(/\s+/)[0] || t.account
   return <>
@@ -256,7 +256,7 @@ function AuthModal({ lang, onClose, login, register, onSuccess }: {
   </motion.div></>
 }
 
-function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang; onClose: () => void; onLogout: () => Promise<void>; onListingsChanged?: () => void }) {
+function Dashboard({ lang, onClose, onLogout, onListingsChanged, onOpenListing }: { lang: Lang; onClose: () => void; onLogout: () => Promise<void>; onListingsChanged?: () => void; onOpenListing?: (listingId: string) => void }) {
   const { user, updateProfile } = useAuth()
   const t = text[lang]
   const x = extra[lang]
@@ -298,6 +298,12 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
   useEffect(() => { if (activeConversation) api.messages(activeConversation).then(setChatMessages).catch((err) => setError(err.message)) }, [activeConversation])
   const statuses = useMemo(() => ({ draft: t.draft, published: t.published, archived: t.archived }), [t])
   const activeChat = conversations.find((item) => item.id === activeConversation) || null
+  const openListing = (event: ReactMouseEvent<HTMLAnchorElement>, listingId: string) => {
+    if (!onOpenListing || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    onClose()
+    onOpenListing(listingId)
+  }
 
   const field = (name: keyof ListingPayload, value: unknown) => setForm((current) => ({ ...current, [name]: value }))
   const setBooleanField = (name: ListingBooleanField, checked: boolean) => {
@@ -456,10 +462,10 @@ function Dashboard({ lang, onClose, onLogout, onListingsChanged }: { lang: Lang;
           const cover = listing.media.find((media) => media.is_cover) || listing.media.find((media) => media.media_type === 'image')
           const pendingKind = pendingAction?.id === listing.id ? pendingAction.kind : null
           const actionsLocked = pendingAction !== null
-          return <article key={listing.id} aria-busy={pendingKind !== null}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div>{listing.status === 'published' && <a className="edit" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer">{x.openListing}</a>}<button type="button" className="edit" disabled={actionsLocked} onClick={() => startEdit(listing)}>{t.edit}</button>{listing.status !== 'published' && <button type="button" className={`listing-status-action${pendingKind === 'publish' ? ' loading' : ''}`} disabled={actionsLocked} aria-busy={pendingKind === 'publish'} onClick={() => action('publish', listing.id)}>{pendingKind === 'publish' ? <><span className="listing-action-spinner" aria-hidden="true" />{x.publishing}</> : t.publish}</button>}{listing.status === 'published' && <button type="button" className={`listing-status-action${pendingKind === 'archive' ? ' loading' : ''}`} disabled={actionsLocked} aria-busy={pendingKind === 'archive'} onClick={() => action('archive', listing.id)}>{pendingKind === 'archive' ? <><span className="listing-action-spinner" aria-hidden="true" />{x.archiving}</> : t.archive}</button>}<button type="button" className="danger" disabled={actionsLocked} onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
+          return <article key={listing.id} aria-busy={pendingKind !== null}>{cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="dashboard-placeholder">⌂</div>}<div><span className={`status ${listing.status}`}>{statuses[listing.status]}</span><h3>{listing.title}</h3><p>{Number(listing.monthly_rent).toLocaleString()} ₼ · {listing.area_sqm} m²</p><div>{listing.status === 'published' && <a className="edit" href={listingUrl(listing.id)} onClick={(event) => openListing(event, listing.id)}>{x.openListing}</a>}<button type="button" className="edit" disabled={actionsLocked} onClick={() => startEdit(listing)}>{t.edit}</button>{listing.status !== 'published' && <button type="button" className={`listing-status-action${pendingKind === 'publish' ? ' loading' : ''}`} disabled={actionsLocked} aria-busy={pendingKind === 'publish'} onClick={() => action('publish', listing.id)}>{pendingKind === 'publish' ? <><span className="listing-action-spinner" aria-hidden="true" />{x.publishing}</> : t.publish}</button>}{listing.status === 'published' && <button type="button" className={`listing-status-action${pendingKind === 'archive' ? ' loading' : ''}`} disabled={actionsLocked} aria-busy={pendingKind === 'archive'} onClick={() => action('archive', listing.id)}>{pendingKind === 'archive' ? <><span className="listing-action-spinner" aria-hidden="true" />{x.archiving}</> : t.archive}</button>}<button type="button" className="danger" disabled={actionsLocked} onClick={() => action('delete', listing.id)}>{t.remove}</button></div></div></article>
         }) : <div className="dashboard-empty">{t.empty}<button type="button" onClick={startCreate}>{t.add}</button></div>}</div> : tab === 'favorites' ?
-        <div className="dashboard-list">{favorites.length ? favorites.map((listing) => { const cover = listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image'); return <article key={listing.id}>{cover ? <a className="dashboard-listing-image" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer"><img src={mediaUrl(cover.url)} alt={listing.title} /></a> : <div className="dashboard-placeholder">⌂</div>}<div><h3><a href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer">{listing.title}</a></h3><p>{Number(listing.monthly_rent).toLocaleString()} {listing.rent_currency} · {listing.area_sqm} m²</p><div><a className="edit" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer">{x.openListing}</a><button type="button" className="danger" onClick={async () => { try { await api.removeFavorite(listing.id); setFavorites((current) => current.filter((item) => item.id !== listing.id)) } catch (err) { setError(err instanceof Error ? err.message : t.error) } }}>{t.remove}</button></div></div></article> }) : <div className="dashboard-empty">{x.favorites}</div>}</div> : tab === 'chat' ?
-        <div className="chat-layout"><aside>{conversations.length ? conversations.map((item) => <button type="button" key={item.id} className={activeConversation === item.id ? 'active' : ''} onClick={() => setActiveConversation(item.id)}><b>{item.counterpart_name}</b><span>{item.listing_title}</span><small>{item.last_message?.body || '…'}</small></button>) : <p>{x.noChats}</p>}</aside><section>{activeConversation && activeChat ? <><a className={`chat-property-context${activeChat.listing_status !== 'published' ? ' unavailable' : ''}`} href={activeChat.listing_status === 'published' ? listingUrl(activeChat.listing_id) : undefined} target={activeChat.listing_status === 'published' ? '_blank' : undefined} rel="noopener noreferrer" aria-disabled={activeChat.listing_status !== 'published'}>
+        <div className="dashboard-list">{favorites.length ? favorites.map((listing) => { const cover = listing.media.find((item) => item.is_cover) || listing.media.find((item) => item.media_type === 'image'); return <article key={listing.id}>{cover ? <a className="dashboard-listing-image" href={listingUrl(listing.id)} onClick={(event) => openListing(event, listing.id)}><img src={mediaUrl(cover.url)} alt={listing.title} /></a> : <div className="dashboard-placeholder">⌂</div>}<div><h3><a href={listingUrl(listing.id)} onClick={(event) => openListing(event, listing.id)}>{listing.title}</a></h3><p>{Number(listing.monthly_rent).toLocaleString()} {listing.rent_currency} · {listing.area_sqm} m²</p><div><a className="edit" href={listingUrl(listing.id)} onClick={(event) => openListing(event, listing.id)}>{x.openListing}</a><button type="button" className="danger" onClick={async () => { try { await api.removeFavorite(listing.id); setFavorites((current) => current.filter((item) => item.id !== listing.id)) } catch (err) { setError(err instanceof Error ? err.message : t.error) } }}>{t.remove}</button></div></div></article> }) : <div className="dashboard-empty">{x.favorites}</div>}</div> : tab === 'chat' ?
+        <div className="chat-layout"><aside>{conversations.length ? conversations.map((item) => <button type="button" key={item.id} className={activeConversation === item.id ? 'active' : ''} onClick={() => setActiveConversation(item.id)}><b>{item.counterpart_name}</b><span>{item.listing_title}</span><small>{item.last_message?.body || '…'}</small></button>) : <p>{x.noChats}</p>}</aside><section>{activeConversation && activeChat ? <><a className={`chat-property-context${activeChat.listing_status !== 'published' ? ' unavailable' : ''}`} href={activeChat.listing_status === 'published' ? listingUrl(activeChat.listing_id) : undefined} onClick={activeChat.listing_status === 'published' ? (event) => openListing(event, activeChat.listing_id) : undefined} aria-disabled={activeChat.listing_status !== 'published'}>
           {activeChat.listing_cover_url ? <img src={mediaUrl(activeChat.listing_cover_url)} alt="" /> : <span className="chat-property-placeholder"><HouseLogo /></span>}
           <span className="chat-property-copy"><small>{x.listingContext}</small><b>{activeChat.listing_title}</b><span>{activeChat.listing_address} · {districtLabel(activeChat.listing_district, lang)}</span></span>
           <strong>{Number(activeChat.listing_monthly_rent).toLocaleString()} {currencySymbol[activeChat.listing_rent_currency]}<small>{activeChat.listing_status === 'published' ? x.openListing : x.unavailableListing}</small></strong>

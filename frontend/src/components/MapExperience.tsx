@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Layer,
@@ -34,7 +34,7 @@ import ErrorToast from './ErrorToast'
 import { useAuth } from '../context/AuthContext'
 import './MapExperience.css'
 
-type Props = { lang: Lang; initialAiQuery?: string; initialAiResults?: AiSearchResponse; initialListingId?: string; onReady?: () => void; onClose: () => void }
+type Props = { lang: Lang; initialAiQuery?: string; initialAiResults?: AiSearchResponse; initialListingId?: string; onReady?: () => void; onListingOpen: (listingId: string) => void; onListingClose: () => void; onClose: () => void }
 type Layout = 'split' | 'map' | 'list'
 type Sort = 'recommended' | 'priceAsc' | 'priceDesc' | 'areaDesc'
 type PropertyFilter = 'all' | PropertyType
@@ -306,7 +306,7 @@ function NearbyIcon({ type }: { type: NearbyAmenityKey }) {
   </svg>
 }
 
-export default function MapExperience({ lang, initialAiQuery = '', initialAiResults, initialListingId, onReady, onClose }: Props) {
+export default function MapExperience({ lang, initialAiQuery = '', initialAiResults, initialListingId, onReady, onListingOpen, onListingClose, onClose }: Props) {
   const t = copy[lang]
   const x = detailExtra[lang]
   const nearbyText = nearbyCopy[lang]
@@ -355,6 +355,11 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   const [leaseMonths, setLeaseMonths] = useState(1)
   const [availabilitySubscribed, setAvailabilitySubscribed] = useState(false)
   const [availabilityStatus, setAvailabilityStatus] = useState('')
+  const openListingLink = (event: ReactMouseEvent<HTMLAnchorElement>, listingId: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    onListingOpen(listingId)
+  }
 
   const localizedDistrict = useCallback((value: District | string) => (
     districtLabel((typeof value === 'string' ? value : value.id) as DistrictId, lang)
@@ -403,7 +408,12 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   }, [initialAiQuery, initialAiResults, runAiSearch])
 
   useEffect(() => {
-    if (!initialListingId || initialListingOpenedRef.current === initialListingId) return
+    if (!initialListingId) {
+      initialListingOpenedRef.current = null
+      setDetailListing(null)
+      return
+    }
+    if (initialListingOpenedRef.current === initialListingId) return
     const listing = listings.find((item) => item.id === initialListingId)
     initialListingOpenedRef.current = initialListingId
     if (listing) {
@@ -647,11 +657,11 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (photoZoomed) return
-      if (event.key === 'Escape') detailListing ? setDetailListing(null) : onClose()
+      if (event.key === 'Escape') detailListing ? onListingClose() : onClose()
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [detailListing, onClose, photoZoomed])
+  }, [detailListing, onClose, onListingClose, photoZoomed])
 
   const detailPhotos = detailListing
     ? detailListing.media.filter((item) => item.media_type === 'image').sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || a.sort_order - b.sort_order)
@@ -742,7 +752,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
         <button type="button" className={layout === 'map' ? 'active' : ''} onClick={() => changeLayout('map')}><Icon name="map" /><span>{t.map}</span></button>
         <button type="button" className={layout === 'list' ? 'active' : ''} onClick={() => changeLayout('list')}><Icon name="list" /><span>{t.list}</span></button>
       </div>
-      <AccountAccess lang={lang} compact onListingsChanged={() => setListingsVersion((value) => value + 1)} />
+      <AccountAccess lang={lang} compact onListingsChanged={() => setListingsVersion((value) => value + 1)} onOpenListing={onListingOpen} />
       <button type="button" className="search-back" onClick={onClose}><span>{t.back}</span><Icon name="close" /></button>
     </motion.header>
 
@@ -815,8 +825,8 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
           {baseResults.map((listing) => {
             const active = selectedListing === listing.id
             return <Marker key={listing.id} longitude={Number(listing.longitude)} latitude={Number(listing.latitude)} anchor="bottom">
-              <a className={`price-marker${active ? ' active' : ''}`} href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer" onClick={(event) => {
-                event.stopPropagation(); setSelectedListing(listing.id)
+              <a className={`price-marker${active ? ' active' : ''}`} href={listingUrl(listing.id)} onClick={(event) => {
+                event.stopPropagation(); setSelectedListing(listing.id); openListingLink(event, listing.id)
               }} aria-label={`${listing.title}: ${Number(listing.latitude).toFixed(5)}, ${Number(listing.longitude).toFixed(5)}`}>
                 <Icon name="home" /><span>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]}</span>
               </a>
@@ -865,7 +875,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
             return <motion.article className="map-selected-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
               {cover ? <img src={mediaUrl(cover.url)} alt="" /> : <div className="listing-image-placeholder"><Icon name="home" /></div>}
               <div><span>{t.selectedHome}</span><b>{money(priceFor(listing).value)} {currencySymbol[priceFor(listing).currency]} <small>{t.month}</small></b><p>{listing.rooms} {t.rooms.toLowerCase()} · {listing.area_sqm} {t.area}</p><small className="listing-coordinates">⌖ {Number(listing.latitude).toFixed(5)}, {Number(listing.longitude).toFixed(5)}</small></div>
-              <a href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer">{t.view}<Icon name="arrow" /></a>
+              <a href={listingUrl(listing.id)} onClick={(event) => openListingLink(event, listing.id)}>{t.view}<Icon name="arrow" /></a>
             </motion.article>
           })()}
         </AnimatePresence>
@@ -898,7 +908,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
               onMouseEnter={() => setSelectedListing(listing.id)}
               onMouseLeave={() => { if (selectedListing !== listing.id) setSelectedListing(null) }}
             >
-              <a className="listing-card__open" href={listingUrl(listing.id)} target="_blank" rel="noopener noreferrer" aria-label={`${t.view}: ${listing.title}`} />
+              <a className="listing-card__open" href={listingUrl(listing.id)} onClick={(event) => openListingLink(event, listing.id)} aria-label={`${t.view}: ${listing.title}`} />
               <div className="listing-card__image">
                 {cover ? <img src={mediaUrl(cover.url)} alt={`${listing.title}, ${listing.address}`} loading="lazy" /> : <span className="listing-image-placeholder"><Icon name="home" /></span>}
                 <span>{t.available}</span>
@@ -931,7 +941,7 @@ export default function MapExperience({ lang, initialAiQuery = '', initialAiResu
     <AnimatePresence>
       {detailListing && <motion.div className="listing-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <motion.article className="listing-modal" aria-labelledby="listing-modal-title" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}>
-          <header><div><span>{t.available}</span><b>{localizedDistrict(detailListing.district)} · Bakı</b></div><button type="button" className="listing-page-back" onClick={() => setDetailListing(null)} aria-label={x.backToMap}>← <span>{x.backToMap}</span></button></header>
+          <header><div><span>{t.available}</span><b>{localizedDistrict(detailListing.district)} · Bakı</b></div><button type="button" className="listing-page-back" onClick={onListingClose} aria-label={x.backToMap}>← <span>{x.backToMap}</span></button></header>
           <div className="listing-modal__content">
             <div className="listing-modal__visuals">
               <div className="listing-modal__gallery">

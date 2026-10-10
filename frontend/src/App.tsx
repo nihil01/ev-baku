@@ -7,6 +7,7 @@ import AccountAccess from './components/AccountAccess'
 import HouseLogo from './components/HouseLogo'
 import BrandedLoader from './components/BrandedLoader'
 import LandingListings from './components/LandingListings'
+import { listingUrl } from './lib/api'
 import { startAvailabilityNotificationScheduler } from './lib/availabilityNotifications'
 import type { AiSearchResponse, Lang } from './types/api'
 import './App.css'
@@ -23,10 +24,29 @@ function listingFromUrl() {
   return new URLSearchParams(window.location.search).get('listing')?.trim() || null
 }
 
+function mapFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('view') === 'map' || Boolean(params.get('listing')?.trim())
+}
+
+function homeUrl() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('view')
+  url.searchParams.delete('listing')
+  return url.toString()
+}
+
+function mapUrl() {
+  const url = new URL(window.location.href)
+  url.searchParams.set('view', 'map')
+  url.searchParams.delete('listing')
+  return url.toString()
+}
+
 export default function App() {
   const directListingId = useRef(listingFromUrl()).current
   const [lang, setLang] = useState<Lang>(initialLanguage)
-  const [mapOpen, setMapOpen] = useState(Boolean(directListingId))
+  const [mapOpen, setMapOpen] = useState(mapFromUrl)
   const [aiQuery, setAiQuery] = useState('')
   const [initialAiResults, setInitialAiResults] = useState<AiSearchResponse | null>(null)
   const [initialListingId, setInitialListingId] = useState<string | null>(directListingId)
@@ -53,8 +73,21 @@ export default function App() {
 
   useEffect(() => startAvailabilityNotificationScheduler(), [])
 
+  useEffect(() => {
+    const syncRoute = () => {
+      const listingId = listingFromUrl()
+      setInitialListingId(listingId)
+      setMapOpen(mapFromUrl())
+      setMapTransition(null)
+    }
+    window.addEventListener('popstate', syncRoute)
+    return () => window.removeEventListener('popstate', syncRoute)
+  }, [])
+
   const openMap = useCallback((query = '', origin?: { x: number; y: number }, listingId: string | null = null, aiResults: AiSearchResponse | null = null) => {
     if (mapOpen || mapTransition) return
+    if (listingId) window.history.pushState({ evRoute: 'listing', evReturn: 'landing' }, '', listingUrl(listingId))
+    else window.history.pushState({ evRoute: 'map' }, '', mapUrl())
     setAiQuery(query)
     setInitialAiResults(aiResults)
     setInitialListingId(listingId)
@@ -70,6 +103,36 @@ export default function App() {
     openTimer.current = window.setTimeout(() => setMapOpen(true), 320)
     finishTimer.current = window.setTimeout(() => setMapTransition(null), 7000)
   }, [mapOpen, mapTransition, reduceMotion])
+
+  const openListing = useCallback((listingId: string, origin?: { x: number; y: number }) => {
+    if (!mapOpen && !mapTransition) {
+      openMap('', origin, listingId)
+      return
+    }
+    window.history.pushState({ evRoute: 'listing', evReturn: 'map' }, '', listingUrl(listingId))
+    setInitialListingId(listingId)
+  }, [mapOpen, mapTransition, openMap])
+
+  const closeListing = useCallback(() => {
+    if (window.history.state?.evRoute === 'listing') {
+      window.history.back()
+      return
+    }
+    window.history.replaceState({}, '', mapUrl())
+    setInitialListingId(null)
+  }, [])
+
+  const closeMap = useCallback(() => {
+    if (window.history.state?.evRoute === 'map') {
+      window.history.back()
+      return
+    }
+    window.history.replaceState({}, '', homeUrl())
+    setMapTransition(null)
+    setMapOpen(false)
+    setInitialListingId(null)
+    setInitialAiResults(null)
+  }, [])
 
   const finishMapTransition = useCallback(() => {
     if (!mapTransition) return
@@ -94,7 +157,7 @@ export default function App() {
             onClick={() => setLang(item)}
           >{item.toUpperCase()}</button>)}
         </div>
-        <AccountAccess lang={lang} />
+        <AccountAccess lang={lang} onOpenListing={openListing} />
       </div>
     </header>
 
@@ -107,12 +170,13 @@ export default function App() {
       <LandingListings
         lang={lang}
         onExplore={(origin) => openMap('', origin)}
+        onListingOpen={openListing}
       />
     </main>
 
     <AnimatePresence mode="wait">
       {mapOpen && <Suspense key="rental-map" fallback={<div className="map-chunk-loader"><BrandedLoader label={lang === 'ru' ? 'Открываем карту Баку…' : lang === 'az' ? 'Bakı xəritəsi açılır…' : 'Opening the Baku map…'} /></div>}>
-        <MapExperience lang={lang} initialAiQuery={aiQuery} initialAiResults={initialAiResults || undefined} initialListingId={initialListingId || undefined} onReady={finishMapTransition} onClose={() => { setMapTransition(null); setMapOpen(false); setInitialListingId(null); setInitialAiResults(null) }} />
+        <MapExperience lang={lang} initialAiQuery={aiQuery} initialAiResults={initialAiResults || undefined} initialListingId={initialListingId || undefined} onReady={finishMapTransition} onListingOpen={openListing} onListingClose={closeListing} onClose={closeMap} />
       </Suspense>}
     </AnimatePresence>
 
